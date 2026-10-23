@@ -167,6 +167,17 @@ async def test_image_fallback_then_upgrade(sample_project: Path, monkeypatch):
     log = (sample_project / "renders" / "draft" / "stickforge.log.jsonl").read_text()
     assert "image.provider_failed" in log and "AIzaSy-integration" not in log
 
+    # Still down on a rerun: the placeholder now comes from cache, but the report must
+    # still say why the preferred provider was skipped.
+    with respx.mock(assert_all_called=False) as mock:
+        mock.post(GEMINI).mock(return_value=httpx.Response(503, text="overloaded"))
+        await render(sample_project, cfg, mode="draft")
+    report = json.loads((sample_project / "renders" / "draft" / "report.json").read_text())
+    assert all(
+        s["provider_errors"] and s["provider_errors"][0].startswith("gem: HTTP 503")
+        for s in report["scenes"]
+    )
+
     ok = {
         "candidates": [
             {

@@ -90,6 +90,7 @@ async def generate_scene_image(
             st.image_id, st.providers["image"] = hit.sha256, adapter.name
             st.cache_hits["image"] = True
             st.seed_attempt = attempt
+            st.errors.extend(errors)  # why earlier providers were skipped, even on a cache hit
             return
         tmp = ctx.cache.tmp_path(key, ".png")
         limiter = ctx.registry.limiter(adapter.name)
