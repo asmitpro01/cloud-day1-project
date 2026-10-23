@@ -93,3 +93,35 @@ Short log of choices made where the spec left room. Newest at the bottom.
   only if it resolves to patched versions; otherwise it is documented as a manual
   install.
 - The audit script now includes all extras.
+
+## M3 — polish
+- **Camera smoothness, measured**: zoompan snaps its crop window to whole input
+  pixels. Phase-correlation jitter on a 5 s pan (RMS deviation from the ideal eased
+  path): 1x input 0.75 px, 2x 0.44 px, 3x 0.34 px, 4x 0.21–0.27 px; a Pillow
+  sub-pixel reference measures 0.19 px (the method's noise floor). Default 4x for
+  final, 2x for draft (`modes.<m>.camera_oversample`). zoompan writes straight to
+  the output size: an extra same-size lanczos pass cost ~10 s per scene for nothing.
+- **Easing**: cosine ease-in-out per scene, so motion starts and stops softly at cuts.
+- **Crossfade without breaking sync**: instead of overlapping segments (which shortens
+  the video and breaks stream-copy concat), each segment starts by fading from the
+  previous scene's *final camera view*. That frame is computed with Pillow from the
+  image + camera end state + title, so segments still render in parallel; the
+  boundary frames measured SSIM 0.993 / PSNR 36 dB against ffmpeg's last frame.
+- **Text**: all titles and burned-in captions are Pillow PNGs (control and bidi
+  characters stripped), composited with `overlay` + numeric `enable` windows. The
+  default font is Pillow's bundled FreeType font, identical on every OS.
+- **Captions**: <= 84 chars (2 x 42) and <= 5 s per cue, break after sentences,
+  long cues split at the last clause comma, two-line captions balanced. SRT text is
+  sanitised (no newlines, `-->` replaced) so narration cannot forge cues.
+- **Audio**: float32 throughout until the final AAC encode, so voice + SFX + music
+  never clip before normalization. Ducking is a sidechain compressor keyed by the
+  voice. Loudness: two-pass `loudnorm` (linear mode) to -14 LUFS / -1 dBTP / LRA 11;
+  measured on the offline test render within 1 LU. All-silent tracks skip loudnorm.
+- **SFX** are mixed into each scene's own audio (trimmed to the scene, faded out),
+  keeping audio per-scene cacheable.
+- **Cache fix**: sidecars are `<key>.meta.json`; a `.json` media file previously
+  collided with its own sidecar.
+- **WhisperX** stays out of the lock (3.8.6 still pins torch 2.8 / transformers
+  4.57 with advisories); the adapter is used automatically if the user installs it.
+- **`tone` test TTS**: a speech-like tone so offline tests can verify loudness and
+  ducking; never used by default chains.
