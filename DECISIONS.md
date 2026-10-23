@@ -151,3 +151,12 @@ Short log of choices made where the spec left room. Newest at the bottom.
   and license notes for providers, local model files, music and font.
 - `openai_compat` image adapter (OpenAI images API shape from the official SDK's
   types) doubles as the worked example in the README's provider guide.
+- **True peak after AAC**: loudnorm hitting -1.0 dBTP exactly still produced -0.3 dBTP
+  in a 10-minute AAC file (encoder overshoot ~0.7 dB). Normalization now targets
+  `true_peak - codec_headroom_db` (-2 dBTP); the encoded file is measured and, if it
+  still exceeds the ceiling, the audio is trimmed once and a warning recorded.
+  100-scene draft: -14.1 LUFS / -1.8 dBTP.
+- **Incremental re-render cost** for a 10-minute video is dominated by whole-track
+  audio work (two-pass loudnorm ~45 s, AAC mux + loudness check ~35 s on 4 vCPU);
+  per-scene work is seconds. Acceptable for now; a later optimisation could normalize
+  per scene with a fixed gain to make edits O(scene).
