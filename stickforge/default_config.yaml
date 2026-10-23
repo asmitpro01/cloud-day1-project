@@ -92,6 +92,14 @@ providers:
       # Model input fields not verifiable from this environment (fal.ai blocked);
       # adjust here if fal's model page differs.
       input: {image_size: landscape_16_9, output_format: png, enable_safety_checker: true}
+  openai_image:                      # any OpenAI-compatible images endpoint; not in a chain
+    adapter: openai_compat           # by default — add it to modes.<m>.chains.image to use
+    model: gpt-image-2               # set to what your provider serves
+    endpoint: https://api.openai.com/v1
+    api_key_env: OPENAI_API_KEY
+    timeout_s: 180
+    cost: {per_image_usd: 0.0}       # fill in from your provider's pricing page
+    settings: {size: 1536x864, extra: {quality: medium, output_format: png}}
   placeholder:
     adapter: placeholder
 
