@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import contextlib
 import hashlib
+import re
 from collections.abc import Iterable
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -14,6 +15,9 @@ from stickforge.core.security import REDACTOR
 from stickforge.providers.base import PermanentProviderError, TransientProviderError
 
 TRANSIENT_STATUS = frozenset({408, 409, 425, 429, 500, 502, 503, 504})
+# A 429 that means "no quota left" (daily cap, zero free tier, billing exhausted) will not
+# clear in seconds — retrying only wastes time, so it goes straight to the next provider.
+_HARD_QUOTA = re.compile(r"limit:\s*0\b|per[ _-]?day|PerDay|insufficient_quota", re.I)
 MAX_ERROR_BODY = 500
 
 
@@ -50,6 +54,8 @@ def raise_for_status(resp: httpx.Response, provider: str) -> None:
     body = REDACTOR.text(resp.text[:MAX_ERROR_BODY]) if resp.content else ""
     msg = f"{provider}: HTTP {resp.status_code}: {body}".strip()
     if resp.status_code == 429:
+        if _HARD_QUOTA.search(resp.text[:4000]):
+            raise PermanentProviderError(f"{provider}: quota exhausted (HTTP 429): {body}")
         raise RateLimited(msg, _retry_after(resp))
     if resp.status_code in TRANSIENT_STATUS:
         raise TransientProviderError(msg)

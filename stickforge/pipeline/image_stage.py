@@ -120,7 +120,7 @@ async def generate_scene_image(
             ctx.ledger.record(
                 "image", st.scene.id, adapter.name, adapter.model, 0.0, attempts=n, ok=False
             )
-            errors.append(f"{adapter.name}: {e}")
+            errors.append(str(e) if str(e).startswith(adapter.name) else f"{adapter.name}: {e}")
             ctx.log.warning(
                 "image.provider_failed", scene=st.scene.id, provider=adapter.name, error=str(e)
             )

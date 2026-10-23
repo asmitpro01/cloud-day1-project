@@ -9,7 +9,7 @@ import platform
 import shutil
 import sys
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 import typer
 from rich.console import Console
@@ -293,8 +293,22 @@ def render(
     for s in attention:
         codes = ", ".join(i["code"] for i in s["qa"]["issues"]) or s["providers"].get("image")
         console.print(f"[yellow]scene {s['id']}: {s['status']}[/yellow] ({codes})", highlight=False)
+    _print_provider_errors((res.report or {}).get("scenes", []))
     if summary.get("qa_flagged") or attention:
         console.print("see report: stickforge report " + str(project), highlight=False)
+
+
+def _print_provider_errors(scenes: list[dict[str, Any]]) -> None:
+    """Why providers were skipped — each distinct reason once, with the scenes it hit."""
+    reasons: dict[str, list[int]] = {}
+    for s in scenes:
+        for err in s.get("provider_errors", []):
+            line = " ".join(str(err).split())
+            reasons.setdefault(line[:220] + ("…" if len(line) > 220 else ""), []).append(s["id"])
+    for reason, ids in reasons.items():
+        shown = ", ".join(map(str, ids[:8])) + (" …" if len(ids) > 8 else "")
+        console.print("provider error ", style="yellow", end="")
+        console.print(f"(scenes {shown}): {reason}", markup=False, highlight=False)
 
 
 @app.command()
@@ -355,6 +369,7 @@ def report(
             ", ".join(i["code"] for i in sc["qa"]["issues"]),
         )
     console.print(t)
+    _print_provider_errors(doc["scenes"])
     for w in doc.get("warnings", []):
         console.print("warning ", style="yellow", end="")
         console.print(w, markup=False, highlight=False)
