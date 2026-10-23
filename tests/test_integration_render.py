@@ -7,7 +7,10 @@ import shutil
 import subprocess
 from pathlib import Path
 
+import httpx
 import pytest
+import respx
+from adapter_helpers import b64png
 
 from stickforge.config import load_config
 from stickforge.pipeline.orchestrator import render
@@ -69,3 +72,51 @@ async def test_sample_renders_offline_and_caches(sample_project: Path, monkeypat
     scenes_file.write_text(json.dumps(scenes))
     changed = await render(sample_project, cfg, mode="draft")
     assert changed.cache_hits == {"tts": 2, "image": 3, "segment": 2, "scene_audio": 2}
+
+
+GEMINI = "https://generativelanguage.googleapis.com/v1beta/models/gemini-test-image:generateContent"
+FALLBACK_CONFIG = """
+retry: {max_attempts: 2, base_delay_s: 0.0, max_delay_s: 0.0}
+providers:
+  gem: {adapter: gemini, model: gemini-test-image, api_key_env: SF_TEST_GEMINI_KEY,
+        cost: {per_image_usd: 0.04}}
+modes:
+  draft: {chains: {tts: [silent], image: [gem, placeholder], vision_qa: []}}
+"""
+
+
+async def test_image_fallback_then_upgrade(sample_project: Path, monkeypatch):
+    """Gemini down -> every scene falls back to placeholder; Gemini back -> scenes upgrade."""
+    monkeypatch.chdir(sample_project)
+    monkeypatch.setenv("SF_TEST_GEMINI_KEY", "AIzaSy-integration-test-key-000000000")
+    (sample_project / "config.yaml").write_text(FALLBACK_CONFIG)
+    cfg = load_config()
+    with respx.mock(assert_all_called=False) as mock:
+        route = mock.post(GEMINI).mock(return_value=httpx.Response(503, text="overloaded"))
+        res = await render(sample_project, cfg, mode="draft")
+        assert route.call_count == 3 * 2  # 3 scenes x max_attempts, then fallback
+    assert res.output.is_file()
+    log = (sample_project / "renders" / "draft" / "stickforge.log.jsonl").read_text()
+    assert "image.provider_failed" in log and "AIzaSy-integration" not in log
+
+    ok = {
+        "candidates": [
+            {
+                "content": {
+                    "parts": [
+                        {
+                            "inlineData": {
+                                "mimeType": "image/png",
+                                "data": b64png(1344, 768, "orange"),
+                            }
+                        }
+                    ]
+                }
+            }
+        ]
+    }
+    with respx.mock(assert_all_called=False) as mock:
+        route = mock.post(GEMINI).mock(return_value=httpx.Response(200, json=ok))
+        again = await render(sample_project, cfg, mode="draft")
+        assert route.call_count == 3
+    assert again.cache_hits["image"] == 0 and again.cache_hits["tts"] == 3

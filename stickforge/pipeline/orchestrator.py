@@ -10,6 +10,7 @@ from stickforge import logs
 from stickforge.config import EngineConfig
 from stickforge.core.cache import Cache
 from stickforge.core.ffmpeg import EncoderParams, FFmpeg
+from stickforge.core.retry import RetryPolicy
 from stickforge.core.security import safe_project_path
 from stickforge.lint import LintWarning, lint_scenes
 from stickforge.pipeline import assemble_stage, audio_stage, image_stage, render_stage, tts_stage
@@ -76,17 +77,22 @@ async def render(
         reporter=reporter,
         log=log,
         force=force,
+        retry=RetryPolicy(**config.retry.model_dump()),
         scenes=[SceneState(scene=s) for s in loaded.scenes],
     )
     log.info("render.start", scenes=len(ctx.scenes), encoder=codec)
     for w in warnings:
         log.warning("lint", scene=w.scene_id, message=w.message)
 
-    await tts_stage.run(ctx)
-    await image_stage.run(ctx)
-    await render_stage.run(ctx)
-    await audio_stage.run(ctx)
-    output = await assemble_stage.run(ctx)
+    try:
+        await tts_stage.run(ctx)
+        await image_stage.run(ctx)
+        await render_stage.run(ctx)
+        await audio_stage.run(ctx)
+        output = await assemble_stage.run(ctx)
+    except Exception:
+        log.exception("render.failed")
+        raise
 
     hits: dict[str, int] = {}
     for st in ctx.scenes:
