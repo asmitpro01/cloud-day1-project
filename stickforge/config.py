@@ -74,8 +74,27 @@ class AudioConfig(_Strict):
     fade_ms: int = Field(default=8, ge=0, le=100)
 
 
+class RetryConfig(_Strict):
+    max_attempts: int = Field(default=4, ge=1, le=10)
+    base_delay_s: float = Field(default=1.0, ge=0.0, le=60.0)
+    max_delay_s: float = Field(default=30.0, ge=0.0, le=600.0)
+
+
+class ModelFile(_Strict):
+    """A downloadable local model file, pinned by sha256."""
+
+    url: str = Field(pattern=r"^https://")
+    sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    file: str = Field(pattern=r"^[A-Za-z0-9._/-]+$")  # relative to models_dir
+    max_bytes: int = Field(default=1_000_000_000, gt=0)
+    license_note: str = ""
+
+
 class EngineConfig(_Strict):
     seed: int = 1234
+    models_dir: str = ""  # "" = per-user default; env STICKFORGE_MODELS_DIR overrides
+    retry: RetryConfig = RetryConfig()
+    models: dict[str, ModelFile] = Field(default_factory=dict)
     cache_dir: str = ".cache"
     output_dir: str = "renders"
     providers: dict[str, ProviderConfig]
@@ -94,6 +113,17 @@ class EngineConfig(_Strict):
             if required not in self.modes:
                 raise ValueError(f"modes.{required} is required")
         return self
+
+    def models_path(self) -> Path:
+        env = os.environ.get("STICKFORGE_MODELS_DIR")
+        if env:
+            return Path(env).expanduser()
+        if self.models_dir:
+            return Path(self.models_dir).expanduser()
+        if os.name == "nt":
+            base = Path(os.environ.get("LOCALAPPDATA") or Path.home() / "AppData" / "Local")
+            return base / "stickforge" / "models"
+        return Path.home() / ".cache" / "stickforge" / "models"
 
     def secret_for(self, provider_name: str) -> str | None:
         """Resolve a provider's key from the environment. Never logged or stored."""

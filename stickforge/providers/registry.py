@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from functools import cache
 
 from stickforge.config import EngineConfig
+from stickforge.core.ratelimit import Limiter
 from stickforge.providers.base import Adapter, Kind
 
 _KIND_PACKAGES = ("tts", "image", "llm", "align", "video")
@@ -53,6 +54,7 @@ class Registry:
         self.config = config
         self.adapters = discover()
         self._instances: dict[str, Adapter] = {}
+        self._limiters: dict[str, Limiter] = {}
         for name, pc in config.providers.items():
             if pc.adapter not in self.adapters:
                 raise RegistryError(
@@ -71,6 +73,8 @@ class Registry:
             ready, reason = False, f"optional dependency '{cls.optional_dependency}' not installed"
         elif cls.requires_key and not self.config.secret_for(name):
             ready, reason = False, f"env var {pc.api_key_env or '(api_key_env unset)'} not set"
+        elif (problem := cls.readiness_problem(pc, self.config)) is not None:
+            ready, reason = False, problem
         return ProviderStatus(name, pc.adapter, cls.kind, pc.model, ready, reason)
 
     def get(self, name: str, kind: Kind) -> Adapter:
@@ -84,9 +88,22 @@ class Registry:
             raise RegistryError(f"provider {name!r} not ready: {st.reason}")
         if name not in self._instances:
             self._instances[name] = cls(
-                name, self.config.providers[name], self.config.secret_for(name)
+                name,
+                self.config.providers[name],
+                self.config.secret_for(name),
+                engine=self.config,
             )
         return self._instances[name]
+
+    def limiter(self, name: str) -> Limiter:
+        """Shared per-provider limiter (concurrency + requests/minute) for this run."""
+        if name not in self._limiters:
+            pc, cls = self.config.providers[name], self.adapter_class(name)
+            self._limiters[name] = Limiter(
+                pc.max_concurrency or cls.default_max_concurrency,
+                pc.requests_per_minute or cls.default_requests_per_minute,
+            )
+        return self._limiters[name]
 
     def chain(self, names: list[str], kind: Kind) -> list[Adapter]:
         """Ready adapters of a fallback chain, in order. Unready ones are skipped."""

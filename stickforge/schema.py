@@ -83,6 +83,12 @@ class CastMember(_Strict):
 class Voice(_Strict):
     id: str = "default"
     speed: float = Field(default=1.0, ge=0.5, le=2.0)
+    # Voice ids are provider-specific: {"elevenlabs": "<voice id>"} overrides `id`
+    # for that adapter, so a project can switch TTS providers without editing scenes.
+    by_adapter: dict[str, str] = Field(default_factory=dict)
+
+    def for_adapter(self, adapter_name: str) -> str:
+        return self.by_adapter.get(adapter_name, self.id)
 
 
 class Music(_Strict):
