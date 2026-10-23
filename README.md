@@ -135,10 +135,10 @@ A provider is one adapter file plus one config entry. Worked example — the rea
    `providers/base.py`:
    ```python
    class OpenAICompatImage(Adapter):
-       adapter_name = "openai_compat"      # registers the class — no registry edits
+       adapter_name = "openai_compat"  # registers the class — no registry edits
        kind = Kind.IMAGE
-       capabilities = frozenset()          # e.g. {"refs", "seed"} if supported
-       requires_key = True                 # key comes from env via api_key_env
+       capabilities = frozenset()  # e.g. {"refs", "seed"} if supported
+       requires_key = True  # key comes from env via api_key_env
        default_max_concurrency = 4
        default_requests_per_minute = 20
        cost_model = "per image (cost.per_image_usd)"
@@ -146,10 +146,16 @@ A provider is one adapter file plus one config entry. Worked example — the rea
 
        async def generate(self, prompt, refs, aspect, seed, settings, *, out_path):
            ...  # call the API with core.http.client(self.config.timeout_s)
-           http.raise_for_status(resp, self.name)   # 429/5xx -> retried, 4xx -> fallback
-           w, h = save_image_as_png(data, out_path) # validates + re-encodes untrusted bytes
-           return ImageResult(path=out_path, provider=self.name, model=self.config.model,
-                              width=w, height=h, cost_usd=self.cost_rate("per_image_usd"))
+           http.raise_for_status(resp, self.name)  # 429/5xx -> retried, 4xx -> fallback
+           w, h = save_image_as_png(data, out_path)  # validates + re-encodes untrusted bytes
+           return ImageResult(
+               path=out_path,
+               provider=self.name,
+               model=self.config.model,
+               width=w,
+               height=h,
+               cost_usd=self.cost_rate("per_image_usd"),
+           )
    ```
    Rules: write only to `out_path`; read model/endpoint/settings from `self.config`;
    raise `TransientProviderError` (retry) or `PermanentProviderError` (next provider);
