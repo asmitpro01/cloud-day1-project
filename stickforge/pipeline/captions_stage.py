@@ -102,7 +102,7 @@ async def run(ctx: RunContext) -> None:
     ctx.reporter.stage("captions", len(ctx.scenes))
 
     async def one(st: SceneState) -> None:
-        assert st.audio is not None and st.audio_key is not None
+        assert st.audio is not None and st.audio_id is not None
         words: list[WordTiming] | None = None
         for adapter in chain:
             assert isinstance(adapter, Aligner)
@@ -110,11 +110,11 @@ async def run(ctx: RunContext) -> None:
                 {
                     "stage": "align",
                     **adapter.cache_identity(),
-                    "audio": st.audio_key,
+                    "audio": st.audio_id,
                     "text": st.scene.narration,
                 }
             )
-            hit = None if ctx.force else ctx.cache.get(key)
+            hit = None if ctx.forced(st) else ctx.cache.get(key)
             if hit is not None:
                 words = [
                     WordTiming.model_validate(w)

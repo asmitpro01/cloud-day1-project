@@ -16,7 +16,7 @@ DURATION_TOLERANCE_S = 0.2
 
 
 async def _concat_video(ctx: RunContext) -> tuple[Path, str]:
-    keys = [s.segment_key for s in ctx.scenes]
+    keys = [s.segment_id for s in ctx.scenes]
     key = canonical_key({"stage": "video_concat", "v": ASSEMBLE_VERSION, "parts": keys})
     hit = None if ctx.force else ctx.cache.get(key)
     if hit is None:
@@ -35,7 +35,7 @@ async def _concat_video(ctx: RunContext) -> tuple[Path, str]:
             raise
         finally:
             list_file.unlink(missing_ok=True)
-    return hit.path, key
+    return hit.path, hit.sha256
 
 
 def verify(

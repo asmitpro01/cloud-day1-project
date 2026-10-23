@@ -10,6 +10,7 @@ transitions never shift the audio sync.
 from __future__ import annotations
 
 import asyncio
+import time
 
 from stickforge.core.cache import canonical_key
 from stickforge.core.ffmpeg import Overlay, build_segment
@@ -65,16 +66,16 @@ async def _prepare(ctx: RunContext, st: SceneState, motion: Motion, needs_end: b
             tmp = ctx.cache.tmp_path(key, ".png")
             await asyncio.to_thread(render_title, text, w, h, tmp, style)
             hit = ctx.cache.commit(key, tmp, ".png", {})
-        st.title_png, st.title_key = hit.path, key
+        st.title_png, st.title_id = hit.path, hit.sha256
     if needs_end:
         assert st.image is not None
         key = canonical_key(
             {
                 "stage": "end_frame",
                 "v": 1,
-                "image": st.image_key,
+                "image": st.image_id,
                 "motion": repr(motion),
-                "title": st.title_key,
+                "title": st.title_id,
                 "w": w,
                 "h": h,
             }
@@ -85,7 +86,7 @@ async def _prepare(ctx: RunContext, st: SceneState, motion: Motion, needs_end: b
             overlays = (st.title_png,) if st.title_png else ()
             await asyncio.to_thread(render_frame, st.image.path, motion, 1.0, w, h, tmp, overlays)
             hit = ctx.cache.commit(key, tmp, ".png", {})
-        st.end_frame, st.end_frame_key = hit.path, key
+        st.end_frame, st.end_frame_id = hit.path, hit.sha256
 
 
 def _overlays(ctx: RunContext, st: SceneState) -> list[Overlay]:
@@ -112,7 +113,7 @@ async def run(ctx: RunContext) -> None:
 
     async def one(i: int) -> None:
         st = ctx.scenes[i]
-        assert st.image is not None and st.image_key is not None
+        assert st.image is not None and st.image_id is not None
         prev = ctx.scenes[i - 1] if i > 0 else None
         xf = crossfade_s(ctx, st) if prev is not None and prev.end_frame else 0.0
         overlays = _overlays(ctx, st)
@@ -120,25 +121,26 @@ async def run(ctx: RunContext) -> None:
             {
                 "stage": "segment",
                 "v": SEGMENT_VERSION,
-                "image": st.image_key,
+                "image": st.image_id,
                 "frames": st.frames,
                 "w": w,
                 "h": h,
                 "motion": repr(motions[i]),
                 "encoder": ctx.encoder.to_args(),
-                "title": st.title_key,
+                "title": st.title_id,
                 "title_timing": [
                     ctx.config.render.title_delay_s,
                     ctx.config.render.title_fade_in_s,
                 ],
                 "captions": [(k, a, b) for _, a, b, k in st.caption_pngs],
-                "prev": prev.end_frame_key if xf and prev else None,
+                "prev": prev.end_frame_id if xf and prev else None,
                 "crossfade": xf,
             }
         )
-        hit = None if ctx.force else ctx.cache.get(key)
+        hit = None if ctx.forced(st) else ctx.cache.get(key)
         st.cache_hits["segment"] = hit is not None
         if hit is None:
+            t0 = time.monotonic()
             tmp = ctx.cache.tmp_path(key, ".mp4")
             args = build_segment(
                 ctx.ffmpeg.ffmpeg,
@@ -165,12 +167,13 @@ async def run(ctx: RunContext) -> None:
             except BaseException:
                 ctx.cache.discard(tmp)
                 raise
+            st.timings["segment"] = round(time.monotonic() - t0, 3)
             ctx.log.info(
                 "segment.done", scene=st.scene.id, frames=st.frames, camera=st.scene.camera.value
             )
             ctx.reporter.advance("render")
         else:
             ctx.reporter.advance("render", cached=True)
-        st.segment, st.segment_key = hit.path, key
+        st.segment, st.segment_id = hit.path, hit.sha256
 
     await run_all(one, range(len(ctx.scenes)))
