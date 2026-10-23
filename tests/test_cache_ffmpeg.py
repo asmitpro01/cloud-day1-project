@@ -104,6 +104,23 @@ def test_concat_and_mux_args():
     ]
 
 
+def test_mux_gain_trim():
+    plain = build_mux(
+        "ffmpeg", Path("v.mp4"), Path("a.wav"), Path("o.mp4"), aac_bitrate="192k", sample_rate=48000
+    )
+    assert "-af" not in plain
+    trimmed = build_mux(
+        "ffmpeg",
+        Path("v.mp4"),
+        Path("a.wav"),
+        Path("o.mp4"),
+        aac_bitrate="192k",
+        sample_rate=48000,
+        gain_db=-0.6,
+    )
+    assert trimmed[trimmed.index("-af") + 1] == "volume=-0.6dB"
+
+
 def test_concat_list_rejects_unsafe_entries():
     assert concat_list_text(["ab/x.mp4"]) == "ffconcat version 1.0\nfile 'ab/x.mp4'\n"
     for bad in ["a'b.mp4", "../x.mp4", "/abs.mp4", "a b.mp4", "x\nfile '/etc/passwd'"]:

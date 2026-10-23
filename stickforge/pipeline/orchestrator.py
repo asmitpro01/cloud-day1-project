@@ -11,7 +11,7 @@ from typing import Any
 from stickforge import logs
 from stickforge.config import EngineConfig
 from stickforge.core.cache import Cache
-from stickforge.core.ffmpeg import EncoderParams, FFmpeg, build_ebur128, parse_ebur128
+from stickforge.core.ffmpeg import EncoderParams, FFmpeg
 from stickforge.core.retry import RetryPolicy
 from stickforge.core.security import safe_project_path
 from stickforge.lint import LintWarning, lint_scenes
@@ -51,11 +51,6 @@ def make_ffmpeg(config: EngineConfig) -> FFmpeg:
         timeout_base_s=r.timeout_base_s,
         timeout_per_media_s=r.timeout_per_media_s,
     )
-
-
-async def _measure_loudness(ffmpeg: FFmpeg, path: Path, timeout_s: float) -> dict[str, float]:
-    _, err = await ffmpeg.run_capture(build_ebur128(ffmpeg.ffmpeg, path), timeout_s=timeout_s)
-    return parse_ebur128(err.decode("utf-8", "replace"))
 
 
 async def render(
@@ -146,9 +141,7 @@ async def render(
             await timed("audio", audio_stage.run(ctx))
             output = await timed("assemble", assemble_stage.run(ctx))
             assert isinstance(output, Path)
-            loud = await _measure_loudness(
-                ffmpeg, output, ffmpeg.timeout_for(ctx.total_frames() / ctx.fps / 10)
-            )
+            loud = ctx.artifacts_meta.get("loudness", {})
             output_info = {
                 "video": str(output),
                 "srt": str(ctx.artifacts.get("srt", "")),

@@ -7,8 +7,15 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
-from stickforge.core.cache import atomic_write_text, canonical_key
-from stickforge.core.ffmpeg import FFmpegError, build_concat_copy, build_mux, concat_list_text
+from stickforge.core.cache import CacheEntry, atomic_write_text, canonical_key
+from stickforge.core.ffmpeg import (
+    FFmpegError,
+    build_concat_copy,
+    build_ebur128,
+    build_mux,
+    concat_list_text,
+    parse_ebur128,
+)
 from stickforge.pipeline.context import RunContext
 
 ASSEMBLE_VERSION = 1
@@ -36,6 +43,15 @@ async def _concat_video(ctx: RunContext) -> tuple[Path, str]:
         finally:
             list_file.unlink(missing_ok=True)
     return hit.path, hit.sha256
+
+
+async def measure_loudness(ctx: RunContext, media: Path) -> dict[str, float]:
+    """EBU R128 integrated loudness / LRA / true peak of a file's audio."""
+    _, err = await ctx.ffmpeg.run_capture(
+        build_ebur128(ctx.ffmpeg.ffmpeg, media),
+        timeout_s=ctx.ffmpeg.timeout_for(ctx.total_frames() / ctx.fps / 10),
+    )
+    return parse_ebur128(err.decode("utf-8", "replace"))
 
 
 def verify(
@@ -73,18 +89,22 @@ async def run(ctx: RunContext) -> Path:
     ctx.reporter.advance("assemble")
 
     acfg = ctx.config.audio
-    key = canonical_key(
-        {
-            "stage": "mux",
-            "v": ASSEMBLE_VERSION,
-            "video": vkey,
-            "audio": ctx.keys["audio"],
-            "aac": acfg.aac_bitrate,
-            "sr": acfg.sample_rate,
-        }
-    )
-    hit = None if ctx.force else ctx.cache.get(key)
-    if hit is None:
+
+    async def mux(gain_db: float) -> CacheEntry:
+        key = canonical_key(
+            {
+                "stage": "mux",
+                "v": ASSEMBLE_VERSION,
+                "video": vkey,
+                "audio": ctx.keys["audio"],
+                "aac": acfg.aac_bitrate,
+                "sr": acfg.sample_rate,
+                "gain_db": gain_db,
+            }
+        )
+        hit = None if ctx.force else ctx.cache.get(key)
+        if hit is not None:
+            return hit
         tmp = ctx.cache.tmp_path(key, ".mp4")
         try:
             await ctx.ffmpeg.run(
@@ -95,13 +115,27 @@ async def run(ctx: RunContext) -> Path:
                     tmp,
                     aac_bitrate=acfg.aac_bitrate,
                     sample_rate=acfg.sample_rate,
+                    gain_db=gain_db,
                 ),
                 timeout_s=ctx.ffmpeg.timeout_for(ctx.total_frames() / ctx.fps / 4),
             )
-            hit = ctx.cache.commit(key, tmp, ".mp4", {})
+            loud = await measure_loudness(ctx, tmp)
+            return ctx.cache.commit(key, tmp, ".mp4", {"loudness": loud})
         except BaseException:
             ctx.cache.discard(tmp)
             raise
+
+    hit = await mux(0.0)
+    loud = hit.meta.get("loudness", {})
+    peak = loud.get("tp")
+    if peak is not None and peak > acfg.true_peak + 0.05:
+        # Safety net: the encoder overshot the ceiling despite the headroom. Trim once.
+        gain = round(acfg.true_peak - peak - 0.1, 2)
+        ctx.log.warning("assemble.true_peak_trim", measured_tp=peak, gain_db=gain)
+        ctx.warnings.append(f"true peak {peak} dBTP after AAC; trimmed audio by {gain} dB")
+        hit = await mux(gain)
+        loud = hit.meta.get("loudness", {})
+    ctx.artifacts_meta["loudness"] = loud
     ctx.reporter.advance("assemble")
 
     expected = ctx.total_frames() / ctx.fps

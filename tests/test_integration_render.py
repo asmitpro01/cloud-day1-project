@@ -123,7 +123,7 @@ async def test_full_render_offline(full_project: Path, monkeypatch):
 
     integrated, peak = _loudness(res.output)
     assert abs(integrated - cfg.audio.loudness_i) <= 1.0, integrated
-    assert peak <= cfg.audio.true_peak + 0.5, peak  # AAC adds a little overshoot
+    assert peak <= cfg.audio.true_peak + 0.05, peak  # ceiling holds after AAC encoding
 
     srt = (full_project / "renders" / "draft" / "sample.srt").read_text()
     assert srt.startswith("1\n00:00:00,050 --> ") and "Rayleigh" not in srt

@@ -172,7 +172,8 @@ audio:
   aac_bitrate: 192k
   fade_ms: 8             # fade in/out on every voice clip (no clicks at joins)
   loudness_i: -14.0      # integrated loudness target, LUFS (YouTube reference)
-  true_peak: -1.0        # dBTP ceiling
+  true_peak: -1.0        # dBTP ceiling of the final file (after AAC)
+  codec_headroom_db: 1.0 # normalize to true_peak - this; AAC overshoots ~0.5-0.8 dB
   lra: 11.0
   sfx_volume_db: -6.0
   duck_threshold: 0.02   # music ducking (sidechain compressor keyed by the voice)

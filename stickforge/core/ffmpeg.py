@@ -90,8 +90,16 @@ def build_concat_copy(ffmpeg: str, list_file: Path, out: Path) -> list[str]:
 
 
 def build_mux(
-    ffmpeg: str, video: Path, audio: Path, out: Path, *, aac_bitrate: str, sample_rate: int
+    ffmpeg: str,
+    video: Path,
+    audio: Path,
+    out: Path,
+    *,
+    aac_bitrate: str,
+    sample_rate: int,
+    gain_db: float = 0.0,
 ) -> list[str]:
+    trim = ["-af", f"volume={_num(gain_db)}dB"] if gain_db else []
     return [
         ffmpeg,
         *BASE_ARGS,
@@ -103,6 +111,7 @@ def build_mux(
         "0:v:0",
         "-map",
         "1:a:0",
+        *trim,
         "-c:v",
         "copy",
         "-c:a",

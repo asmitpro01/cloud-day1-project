@@ -104,6 +104,7 @@ class RunContext:
     retry: RetryPolicy = field(default_factory=RetryPolicy)
     scenes: list[SceneState] = field(default_factory=list)
     artifacts: dict[str, Path] = field(default_factory=dict)
+    artifacts_meta: dict[str, Any] = field(default_factory=dict)
     keys: dict[str, str] = field(default_factory=dict)
 
     def forced(self, st: SceneState) -> bool:

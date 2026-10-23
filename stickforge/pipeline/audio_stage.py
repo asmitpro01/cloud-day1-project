@@ -185,7 +185,7 @@ async def run(ctx: RunContext) -> None:
     ctx.reporter.advance("audio")
 
     # 3) two-pass loudness normalization (I / TP / LRA from config)
-    target = LoudnessTarget(acfg.loudness_i, acfg.true_peak, acfg.lra)
+    target = LoudnessTarget(acfg.loudness_i, acfg.true_peak - acfg.codec_headroom_db, acfg.lra)
     lkey = canonical_key(
         {"stage": "loudnorm", "v": AUDIO_VERSION, "mix": mix_id, "target": repr(target), "sr": sr}
     )

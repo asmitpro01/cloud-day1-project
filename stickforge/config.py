@@ -83,7 +83,8 @@ class AudioConfig(_Strict):
     aac_bitrate: str = Field(default="192k", pattern=r"^[0-9]{2,3}k$")
     fade_ms: int = Field(default=8, ge=0, le=100)
     loudness_i: float = Field(default=-14.0, ge=-40.0, le=-5.0)  # LUFS (YouTube reference)
-    true_peak: float = Field(default=-1.0, ge=-9.0, le=0.0)  # dBTP
+    true_peak: float = Field(default=-1.0, ge=-9.0, le=0.0)  # dBTP ceiling of the final file
+    codec_headroom_db: float = Field(default=1.0, ge=0.0, le=3.0)  # AAC overshoot allowance
     lra: float = Field(default=11.0, ge=1.0, le=20.0)
     sfx_volume_db: float = Field(default=-6.0, ge=-40.0, le=6.0)
     duck_threshold: float = Field(default=0.02, gt=0.0, le=1.0)
