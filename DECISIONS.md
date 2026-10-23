@@ -160,3 +160,6 @@ Short log of choices made where the spec left room. Newest at the bottom.
   audio work (two-pass loudnorm ~45 s, AAC mux + loudness check ~35 s on 4 vCPU);
   per-scene work is seconds. Acceptable for now; a later optimisation could normalize
   per scene with a fixed gain to make edits O(scene).
+- **fal removed from the default image chains** (user request): it was only a
+  fallback behind Gemini. The adapter and its `fal_schnell` config entry stay so it
+  can be re-enabled by adding it to a chain in `config.yaml`.

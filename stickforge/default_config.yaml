@@ -80,7 +80,8 @@ providers:
     timeout_s: 180
     cost: {per_image_usd: 0.045}     # 1K list price; 2K costs more — check pricing page
     settings: {image_size: 2K, max_refs: 6}
-  fal_schnell:                       # FLUX schnell on fal: cheap fallback, no refs
+  fal_schnell:                       # FLUX schnell on fal: cheap, no refs. Not in a chain by
+                                     # default — add it to modes.<m>.chains.image to use it
     adapter: fal
     model: fal-ai/flux/schnell
     api_key_env: FAL_KEY
@@ -137,7 +138,7 @@ modes:
     qa: false
     chains:
       tts: [kokoro, silent]   # fp32: on x86 CPUs it measured ~4x faster than int8
-      image: [gemini_lite, fal_schnell, placeholder]
+      image: [gemini_lite, placeholder]
       vision_qa: [gemini_qa]
       align: [tts_timestamps, whisperx, scene_level]
   final:
@@ -149,7 +150,7 @@ modes:
     qa: true
     chains:
       tts: [kokoro, silent]
-      image: [gemini_flash, gemini_lite, fal_schnell, placeholder]
+      image: [gemini_flash, gemini_lite, placeholder]
       vision_qa: [gemini_qa]
       align: [tts_timestamps, whisperx, scene_level]
 

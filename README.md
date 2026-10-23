@@ -113,12 +113,13 @@ set its `seed`.
 | Capability | draft chain | final chain |
 |---|---|---|
 | Voice | Kokoro (local) → silent stub | same |
-| Images | Gemini `gemini-3.1-flash-lite-image` → fal FLUX schnell → placeholder | Gemini `gemini-3.1-flash-image` (2K) → flash-lite → fal → placeholder |
+| Images | Gemini `gemini-3.1-flash-lite-image` → placeholder | Gemini `gemini-3.1-flash-image` (2K) → flash-lite → placeholder |
 | Vision QA | (off) | Gemini `gemini-3.8-flash` via litellm |
 | Caption timing | TTS timestamps → WhisperX (if installed) → estimate | same |
 
-Also available: ElevenLabs voice (with word timestamps) and any OpenAI-compatible
-image endpoint (`openai_image`). Unready providers (no key / extra / model file) are
+Also available (configured, not in a chain by default): ElevenLabs voice (with word
+timestamps), fal FLUX schnell (`fal_schnell`) and any OpenAI-compatible image endpoint
+(`openai_image`) — add one to `modes.<mode>.chains.image` in your `config.yaml` to use it. Unready providers (no key / extra / model file) are
 skipped; `stickforge providers` shows why. Model ids, endpoints, voices and prices live
 in config (`stickforge/default_config.yaml`), deep-merged with your `./config.yaml`.
 
