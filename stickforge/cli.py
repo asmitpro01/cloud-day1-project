@@ -205,20 +205,46 @@ class _RichReporter:
         self.p.console.print(message)
 
 
+def _parse_scene_ids(value: str | None) -> set[int] | None:
+    if not value:
+        return None
+    try:
+        ids = {int(x) for x in value.replace(" ", "").split(",") if x}
+    except ValueError:
+        raise typer.BadParameter("use comma-separated scene ids, e.g. 4,12") from None
+    if not ids:
+        raise typer.BadParameter("no scene ids given")
+    return ids
+
+
 @app.command()
 def render(
     project: ProjectArg,
     draft: Annotated[bool, typer.Option("--draft", help="Cheap/fast models, 720p, no QA")] = False,
     final: Annotated[bool, typer.Option("--final", help="Best models, 1080p, QA on")] = False,
-    force: Annotated[bool, typer.Option("--force", help="Ignore cache, regenerate all")] = False,
+    only_scenes: Annotated[
+        str | None,
+        typer.Option(
+            "--only-scenes",
+            help="Regenerate just these scenes, e.g. 4,12 (cache "
+            "bypassed for them); the rest come from cache",
+        ),
+    ] = None,
+    force: Annotated[
+        bool, typer.Option("--force", help="Ignore the cache for every scene")
+    ] = False,
+    qa: Annotated[
+        bool | None, typer.Option("--qa/--no-qa", help="Override the mode's vision-QA setting")
+    ] = None,
     config: ConfigOpt = None,
 ) -> None:
-    """Render a project to a finished MP4."""
+    """Render a project to a finished MP4 (+ .srt, report.json)."""
     from stickforge.pipeline.orchestrator import render as do_render
 
     if draft == final:
         console.print("[red]choose exactly one of --draft / --final[/red]")
         raise typer.Exit(2)
+    ids = _parse_scene_ids(only_scenes)
     cfg = _config(config)
     mode = "draft" if draft else "final"
     with Progress(
@@ -230,7 +256,15 @@ def render(
     ) as progress:
         try:
             res = asyncio.run(
-                do_render(project, cfg, mode=mode, force=force, reporter=_RichReporter(progress))
+                do_render(
+                    project,
+                    cfg,
+                    mode=mode,
+                    force=force,
+                    only_scenes=ids,
+                    qa=qa,
+                    reporter=_RichReporter(progress),
+                )
             )
         except ProjectError as e:
             for p in e.problems:
@@ -244,25 +278,86 @@ def render(
                 style="red",
                 markup=False,
             )
+            console.print(
+                f"details: {project / cfg.output_dir / mode / 'report.json'}", markup=False
+            )
             raise typer.Exit(1) from None
     for w in res.lint:
         console.print(f"[yellow]warning[/yellow] {w}", highlight=False)
+    summary = (res.report or {}).get("summary", {})
     console.print(
-        f"[green]done[/green] {res.output}  ({res.duration_s:.1f}s video, "
-        f"{res.scenes} scenes, {res.wall_s:.1f}s wall, cache hits {res.cache_hits})"
+        f"[green]done[/green] {res.output}  ({res.duration_s:.1f}s video, {res.scenes} scenes, "
+        f"{res.wall_s:.1f}s wall, ${res.cost_usd:.4f} spent, cache hits {res.cache_hits})"
     )
+    attention = [s for s in (res.report or {}).get("scenes", []) if s["status"] != "ok"]
+    for s in attention:
+        codes = ", ".join(i["code"] for i in s["qa"]["issues"]) or s["providers"].get("image")
+        console.print(f"[yellow]scene {s['id']}: {s['status']}[/yellow] ({codes})", highlight=False)
+    if summary.get("qa_flagged") or attention:
+        console.print("see report: stickforge report " + str(project), highlight=False)
 
 
 @app.command()
-def report(project: ProjectArg, config: ConfigOpt = None) -> None:
-    """Pretty-print the last report.json (written from M4 on)."""
+def report(
+    project: ProjectArg,
+    mode: Annotated[str | None, typer.Option(help="draft or final (default: newest)")] = None,
+    json_out: Annotated[bool, typer.Option("--json", help="Print raw JSON")] = False,
+    config: ConfigOpt = None,
+) -> None:
+    """Pretty-print the last report.json."""
     cfg = _config(config)
-    found = sorted((project / cfg.output_dir).glob("*/report.json"))
+    found = sorted(
+        (project / cfg.output_dir).glob("*/report.json"), key=lambda p: p.stat().st_mtime
+    )
+    if mode:
+        found = [f for f in found if f.parent.name == mode]
     if not found:
-        console.print("no report.json yet (reports arrive in M4)")
+        console.print("no report.json yet — run `stickforge render` first")
         raise typer.Exit(1)
-    for f in found:
-        console.print_json(json.dumps(json.loads(f.read_text(encoding="utf-8"))))
+    doc = json.loads(found[-1].read_text(encoding="utf-8"))
+    if json_out:
+        console.print_json(json.dumps(doc))
+        return
+    out = doc.get("output") or {}
+    console.print(
+        f"[bold]{doc['project']}[/bold] — {doc['mode']} — status "
+        f"[{'green' if doc['status'] == 'ok' else 'red'}]{doc['status']}[/]",
+        highlight=False,
+    )
+    if doc.get("error"):
+        console.print(f"[red]{doc['error']}[/red]", markup=False)
+    if out:
+        console.print(
+            f"{out['video']}  {out['duration_s']}s  {out['width']}x{out['height']}@"
+            f"{out['fps']}  loudness {out.get('loudness_lufs')} LUFS "
+            f"(peak {out.get('true_peak_dbtp')})",
+            highlight=False,
+        )
+    cost = doc["cost"]
+    console.print(
+        f"cost ${cost['total_usd']:.4f} in {cost['provider_calls']} calls "
+        f"{cost['by_provider']}  wall {doc['wall_s']}s {doc['stages_s']}",
+        highlight=False,
+    )
+    t = Table(show_lines=False)
+    for col in ("scene", "status", "voice", "image", "attempts", "qa", "cost $", "issues"):
+        t.add_column(col)
+    for sc in doc["scenes"]:
+        style = {"ok": "green", "fallback": "yellow", "qa_flagged": "red"}.get(sc["status"], "")
+        t.add_row(
+            str(sc["id"]),
+            f"[{style}]{sc['status']}[/]" if style else sc["status"],
+            sc["providers"].get("tts", "-"),
+            sc["providers"].get("image", "-"),
+            str(sum(sc["attempts"].values()) if sc["attempts"] else 0),
+            sc["qa"]["status"],
+            f"{sc['cost_usd']:.4f}",
+            ", ".join(i["code"] for i in sc["qa"]["issues"]),
+        )
+    console.print(t)
+    for w in doc.get("warnings", []):
+        console.print("warning ", style="yellow", end="")
+        console.print(w, markup=False, highlight=False)
 
 
 if __name__ == "__main__":
