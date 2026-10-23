@@ -42,6 +42,7 @@ async def run(ctx: RunContext) -> None:
             }
         )
         hit = None if ctx.force else ctx.cache.get(key)
+        cached = hit is not None
         if hit is None:
             tmp = ctx.cache.tmp_path(key, ".wav")
             args = build_scene_audio(
@@ -63,13 +64,15 @@ async def run(ctx: RunContext) -> None:
                 ctx.cache.discard(tmp)
                 raise
         st.scene_audio, st.scene_audio_key = hit.path, key
-        ctx.reporter.advance("audio")
+        st.cache_hits["scene_audio"] = cached
+        ctx.reporter.advance("audio", cached=cached)
 
     await run_all(one, ctx.scenes)
 
     keys = [s.scene_audio_key for s in ctx.scenes]
     key = canonical_key({"stage": "voice_track", "v": AUDIO_VERSION, "parts": keys})
     hit = None if ctx.force else ctx.cache.get(key)
+    track_cached = hit is not None
     if hit is None:
         rel = [ctx.cache.relpath(s.scene_audio) for s in ctx.scenes if s.scene_audio]
         list_file = ctx.cache.root / f"concat-{key}.txt"
@@ -88,4 +91,4 @@ async def run(ctx: RunContext) -> None:
         finally:
             list_file.unlink(missing_ok=True)
     ctx.artifacts["audio"], ctx.keys["audio"] = hit.path, key
-    ctx.reporter.advance("audio")
+    ctx.reporter.advance("audio", cached=track_cached)

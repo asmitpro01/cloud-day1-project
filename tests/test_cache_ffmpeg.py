@@ -155,8 +155,10 @@ def test_concat_list_rejects_unsafe_entries():
 
 
 def test_frame_and_sample_math():
-    assert frames_for(2.0, 0.35, 30) == 71  # 70.5 -> ceil
+    assert frames_for(2.0, 0.35, 30) == 72  # 70.5 -> 71 -> quantum of 3 -> 72
     assert frames_for(1.0, 0.0, 30) == 30  # exact stays exact
-    assert scene_samples(71, 30, 48000) == 113600
+    assert frames_for(1.0, 0.0, 25) == 25 and frames_for(1.01, 0.0, 25) == 26  # quantum 1
+    assert frames_for(0.0, 0.0, 30) == 3
+    assert scene_samples(72, 30, 48000) == 115200
     with pytest.raises(ValueError):
         scene_samples(1, 24, 44100)  # 1837.5 samples per frame

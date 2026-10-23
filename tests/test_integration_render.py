@@ -60,7 +60,7 @@ async def test_sample_renders_offline_and_caches(sample_project: Path, monkeypat
 
     # Rerun: everything from cache.
     again = await render(sample_project, cfg, mode="draft")
-    assert again.cache_hits == {"tts": 3, "image": 3, "segment": 3}
+    assert again.cache_hits == {"tts": 3, "image": 3, "segment": 3, "scene_audio": 3}
 
     # Change one scene's narration: only that scene regenerates.
     scenes_file = sample_project / "scenes.json"
@@ -68,4 +68,4 @@ async def test_sample_renders_offline_and_caches(sample_project: Path, monkeypat
     scenes[1]["narration"] += " Isn't that neat?"
     scenes_file.write_text(json.dumps(scenes))
     changed = await render(sample_project, cfg, mode="draft")
-    assert changed.cache_hits == {"tts": 2, "image": 3, "segment": 2}
+    assert changed.cache_hits == {"tts": 2, "image": 3, "segment": 2, "scene_audio": 2}

@@ -50,9 +50,20 @@ class SceneState:
         return self.frames / fps
 
 
+def frame_quantum(fps: int) -> int:
+    """Smallest frame count whose duration is a whole number of microseconds.
+
+    The concat demuxer accumulates segment offsets in microseconds; segments that are a
+    multiple of this length concatenate with exact constant-frame-rate timestamps.
+    """
+    return fps // math.gcd(fps, 1_000_000)
+
+
 def frames_for(voice_s: float, padding_s: float, fps: int) -> int:
-    """Scene length in whole frames (rounded up), so audio can match video sample-exactly."""
-    return max(1, math.ceil(round((voice_s + padding_s) * fps, 6)))
+    """Scene length in whole frames, rounded up to the frame quantum (30 fps -> 3 frames)."""
+    q = frame_quantum(fps)
+    frames = math.ceil(round((voice_s + padding_s) * fps, 6))
+    return max(q, math.ceil(frames / q) * q)
 
 
 @dataclass
