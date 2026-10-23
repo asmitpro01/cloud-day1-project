@@ -2,15 +2,16 @@
 
 from __future__ import annotations
 
-import asyncio
 import time
+from collections.abc import Awaitable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from stickforge import logs
 from stickforge.config import EngineConfig
 from stickforge.core.cache import Cache
-from stickforge.core.ffmpeg import EncoderParams, FFmpeg
+from stickforge.core.ffmpeg import EncoderParams, FFmpeg, build_ebur128, parse_ebur128
 from stickforge.core.retry import RetryPolicy
 from stickforge.core.security import safe_project_path
 from stickforge.lint import LintWarning, lint_scenes
@@ -19,12 +20,15 @@ from stickforge.pipeline import (
     audio_stage,
     captions_stage,
     image_stage,
+    qa_stage,
     render_stage,
+    report,
     tts_stage,
 )
 from stickforge.pipeline.context import NullReporter, Reporter, RunContext, SceneState
+from stickforge.pipeline.util import settle
 from stickforge.providers.registry import Registry
-from stickforge.schema import load_project
+from stickforge.schema import ProjectError, load_project
 
 
 @dataclass(frozen=True)
@@ -35,6 +39,8 @@ class RenderResult:
     scenes: int
     lint: list[LintWarning]
     cache_hits: dict[str, int]
+    cost_usd: float = 0.0
+    report: dict[str, Any] | None = None
 
 
 def make_ffmpeg(config: EngineConfig) -> FFmpeg:
@@ -47,19 +53,31 @@ def make_ffmpeg(config: EngineConfig) -> FFmpeg:
     )
 
 
+async def _measure_loudness(ffmpeg: FFmpeg, path: Path, timeout_s: float) -> dict[str, float]:
+    _, err = await ffmpeg.run_capture(build_ebur128(ffmpeg.ffmpeg, path), timeout_s=timeout_s)
+    return parse_ebur128(err.decode("utf-8", "replace"))
+
+
 async def render(
     project_dir: Path,
     config: EngineConfig,
     *,
     mode: str = "draft",
     force: bool = False,
+    only_scenes: set[int] | None = None,
+    qa: bool | None = None,
     reporter: Reporter | None = None,
 ) -> RenderResult:
     t0 = time.monotonic()
+    started = time.time()
     loaded = load_project(project_dir)
     warnings = lint_scenes(loaded.scenes)
     mode_cfg = config.modes[mode]
     reporter = reporter or NullReporter()
+    if only_scenes is not None:
+        unknown = sorted(only_scenes - {s.id for s in loaded.scenes})
+        if unknown:
+            raise ProjectError([f"--only-scenes: unknown scene ids {unknown}"])
 
     # cache/output dirs are config values, guarded like any other project path.
     out_dir = safe_project_path(loaded.root, config.output_dir) / mode
@@ -85,35 +103,86 @@ async def render(
         reporter=reporter,
         log=log,
         force=force,
+        only_scenes=frozenset(only_scenes) if only_scenes is not None else None,
+        qa=mode_cfg.qa if qa is None else qa,
         retry=RetryPolicy(**config.retry.model_dump()),
         scenes=[SceneState(scene=s) for s in loaded.scenes],
     )
-    log.info("render.start", scenes=len(ctx.scenes), encoder=codec)
+    ctx.warnings.extend(str(w) for w in warnings)
+    log.info(
+        "render.start",
+        scenes=len(ctx.scenes),
+        encoder=codec,
+        qa=ctx.qa,
+        only_scenes=sorted(only_scenes) if only_scenes else None,
+    )
     for w in warnings:
         log.warning("lint", scene=w.scene_id, message=w.message)
 
-    try:
-        # Independent stages: TTS (local CPU) and images (network) overlap.
-        async def voice_then_captions() -> None:
-            await tts_stage.run(ctx)
-            await captions_stage.run(ctx)
+    stage_s: dict[str, float] = {}
+    error: BaseException | None = None
+    output_info: dict[str, object] | None = None
 
-        async with asyncio.TaskGroup() as tg:
-            tg.create_task(voice_then_captions())
-            tg.create_task(image_stage.run(ctx))
-        await render_stage.run(ctx)
-        await audio_stage.run(ctx)
-        output = await assemble_stage.run(ctx)
-    except* Exception as eg:
-        log.exception("render.failed")
-        raise eg.exceptions[0] from None
+    async def timed(name: str, coro: Awaitable[object]) -> object:
+        s0 = time.monotonic()
+        try:
+            return await coro
+        finally:
+            stage_s[name] = round(time.monotonic() - s0, 2)
+
+    try:
+        try:
+            # Independent branches: voice (local CPU) and images (network) overlap.
+            async def voice_then_captions() -> None:
+                await timed("tts", tts_stage.run(ctx))
+                await timed("captions", captions_stage.run(ctx))
+
+            async def images_then_qa() -> None:
+                await timed("images", image_stage.run(ctx))
+                await timed("qa", qa_stage.run(ctx))
+
+            await settle(voice_then_captions(), images_then_qa())
+            await timed("render", render_stage.run(ctx))
+            await timed("audio", audio_stage.run(ctx))
+            output = await timed("assemble", assemble_stage.run(ctx))
+            assert isinstance(output, Path)
+            loud = await _measure_loudness(
+                ffmpeg, output, ffmpeg.timeout_for(ctx.total_frames() / ctx.fps / 10)
+            )
+            output_info = {
+                "video": str(output),
+                "srt": str(ctx.artifacts.get("srt", "")),
+                "duration_s": round(ctx.total_frames() / ctx.fps, 3),
+                "width": mode_cfg.width,
+                "height": mode_cfg.height,
+                "fps": mode_cfg.fps,
+                "encoder": codec,
+                "loudness_lufs": loud.get("i"),
+                "true_peak_dbtp": loud.get("tp"),
+                "loudness_target": {"i": config.audio.loudness_i, "tp": config.audio.true_peak},
+            }
+        except Exception as e:
+            error = e
+            log.exception("render.failed")
+            raise
+    finally:
+        report_doc = report.build(
+            ctx, started=started, error=error, stage_s=stage_s, output=output_info
+        )
+        report.write(ctx, report_doc)
 
     hits: dict[str, int] = {}
     for st in ctx.scenes:
         for stage, was_hit in st.cache_hits.items():
             hits[stage] = hits.get(stage, 0) + int(was_hit)
     wall = time.monotonic() - t0
-    log.info("render.done", output=str(output), wall_s=round(wall, 2), cache_hits=hits)
+    log.info(
+        "render.done",
+        output=str(output),
+        wall_s=round(wall, 2),
+        cache_hits=hits,
+        cost_usd=ctx.ledger.total_usd,
+    )
     return RenderResult(
         output=output,
         duration_s=ctx.total_frames() / ctx.fps,
@@ -121,4 +190,6 @@ async def render(
         scenes=len(ctx.scenes),
         lint=warnings,
         cache_hits=hits,
+        cost_usd=ctx.ledger.total_usd,
+        report=report_doc,
     )

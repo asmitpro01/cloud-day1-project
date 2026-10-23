@@ -53,6 +53,7 @@ class Scene(_Strict):
     camera: Camera = Camera.STATIC
     on_screen_text: str = Field(default="", max_length=200)
     sfx: str = ""  # relative path inside the project, or empty
+    seed: int | None = Field(default=None, ge=0, le=2**31 - 2)  # set to re-roll the image
 
     @property
     def word_count(self) -> int:

@@ -110,8 +110,13 @@ class ModelFile(_Strict):
     license_note: str = ""
 
 
+class QAConfig(_Strict):
+    max_retries: int = Field(default=2, ge=0, le=10)  # re-rolls per scene before flagging
+
+
 class EngineConfig(_Strict):
     seed: int = 1234
+    qa: QAConfig = QAConfig()
     models_dir: str = ""  # "" = per-user default; env STICKFORGE_MODELS_DIR overrides
     retry: RetryConfig = RetryConfig()
     models: dict[str, ModelFile] = Field(default_factory=dict)

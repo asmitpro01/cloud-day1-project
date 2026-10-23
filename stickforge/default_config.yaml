@@ -11,6 +11,9 @@ cache_dir: .cache        # relative to the project folder
 output_dir: renders      # relative to the project folder
 models_dir: ""           # "" = ~/.cache/stickforge/models (Windows: %LOCALAPPDATA%\stickforge\models)
 
+qa:
+  max_retries: 2         # failed QA -> regenerate with a new seed, then flag in report.json
+
 retry:
   max_attempts: 4        # 429 / 5xx / timeouts only; auth + validation errors never retry
   base_delay_s: 1.0
