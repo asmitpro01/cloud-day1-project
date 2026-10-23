@@ -27,6 +27,7 @@ def main() -> int:
                 "--frozen",
                 "--no-hashes",
                 "--no-emit-project",
+                "--all-extras",
                 "--format",
                 "requirements-txt",
                 "-o",

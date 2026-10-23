@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -85,14 +86,16 @@ async def render(
         log.warning("lint", scene=w.scene_id, message=w.message)
 
     try:
-        await tts_stage.run(ctx)
-        await image_stage.run(ctx)
+        # Independent stages: TTS (local CPU) and images (network) overlap.
+        async with asyncio.TaskGroup() as tg:
+            tg.create_task(tts_stage.run(ctx))
+            tg.create_task(image_stage.run(ctx))
         await render_stage.run(ctx)
         await audio_stage.run(ctx)
         output = await assemble_stage.run(ctx)
-    except Exception:
+    except* Exception as eg:
         log.exception("render.failed")
-        raise
+        raise eg.exceptions[0] from None
 
     hits: dict[str, int] = {}
     for st in ctx.scenes:

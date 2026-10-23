@@ -59,3 +59,37 @@ Short log of choices made where the spec left room. Newest at the bottom.
   params, auth headers) + any field whose name looks sensitive.
 - Dependency audit is `scripts/audit.py` (Python, works on Windows) rather than a
   shell script; the Makefile is only a convenience wrapper.
+
+## M2 — providers and resilience
+- **Where model ids/API shapes came from**: provider doc sites (ai.google.dev, fal.ai,
+  elevenlabs.io, huggingface.co) are blocked from the build container, so ids and
+  request/response shapes were taken from the providers' official SDK sources and
+  cookbooks on GitHub (google-genai types/models, gemini cookbook, elevenlabs-python,
+  fal-client) on 2026-10-23. Prices come from litellm's cost map (v1.106.2) and are
+  labelled as such in config. **fal model input fields** (`image_size:
+  landscape_16_9`, …) could not be verified and live in config so they can be fixed
+  without code changes.
+- **Kokoro fp32 for both modes**: measured on this 4-vCPU x86 box, int8 ran at RTF
+  1.11 vs 0.26 for fp32 (int8 kernels are slow without VNNI). fp32 is faster *and*
+  better, and identical TTS in draft/final means final reuses draft's audio and
+  timing. The int8 entry stays in config for low-RAM machines.
+- **Model files** are pinned by sha256 in config and fetched from the kokoro-onnx
+  GitHub release (HuggingFace is blocked here; same files). Stored per user, outside
+  the repo (`~/.cache/stickforge/models`, `%LOCALAPPDATA%\stickforge\models`).
+- **Gemini**: thought (draft) images are ignored; the last non-thought image wins.
+  Safety refusals are permanent (next provider); a text-only reply is transient
+  (retried). Images are re-encoded to PNG, which also strips metadata.
+- **fal**: the API key is only ever sent to allowlisted API hosts — `status_url` /
+  `response_url` come from the server and are checked before use. Result images are
+  fetched without credentials, from allowlisted media hosts, through the downloader.
+- **Retries**: full-jitter exponential backoff, Retry-After as a floor, only for
+  429/5xx/408/409/425/timeouts. Each provider gets a shared limiter (concurrency +
+  requests/minute token bucket) for the run.
+- **TTS + images run concurrently** (CPU-bound local voice vs network-bound images).
+- **litellm** debug output and telemetry are disabled; its own retries are off
+  (`num_retries=0`) so our policy is the only one.
+- **WhisperX extra removed from the lockfile** for now: it pins torch/transformers
+  versions with published advisories (pip-audit). It returns with the aligner in M3
+  only if it resolves to patched versions; otherwise it is documented as a manual
+  install.
+- The audit script now includes all extras.

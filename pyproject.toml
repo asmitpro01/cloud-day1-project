@@ -19,7 +19,6 @@ dependencies = [
 [project.optional-dependencies]
 kokoro = ["kokoro-onnx>=0.6.1,<0.7", "numpy>=2.0"]   # local TTS (CPU, ~100 MB + model files)
 llm = ["litellm>=1.50"]                              # LLM / vision-QA calls
-align = ["whisperx>=3.3"]                            # word-level captions (pulls PyTorch, >1 GB)
 
 [project.scripts]
 stickforge = "stickforge.cli:app"
