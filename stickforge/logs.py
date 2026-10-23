@@ -42,6 +42,7 @@ def configure(log_file: Path | None = None, *, verbose: bool = False) -> None:
         processors=[
             structlog.processors.add_log_level,
             structlog.processors.TimeStamper(fmt="iso", utc=True),
+            structlog.processors.format_exc_info,  # traceback text, redacted below
             REDACTOR,  # must run before rendering
             structlog.processors.JSONRenderer(),
         ],
