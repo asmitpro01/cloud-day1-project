@@ -45,6 +45,7 @@ class ModeConfig(_Strict):
     x264_preset: str = Field(default="medium", pattern=r"^[a-z]+$")
     crf: int = Field(default=20, ge=0, le=51)
     qa: bool = False
+    camera_oversample: int | None = Field(default=None, ge=1, le=8)  # overrides render.camera
     chains: Chains
 
     @model_validator(mode="after")
@@ -56,7 +57,16 @@ class ModeConfig(_Strict):
         return self
 
 
+class CameraConfig(_Strict):
+    zoom_amount: float = Field(default=0.12, ge=0.0, le=0.5)
+    pan_zoom: float = Field(default=1.12, ge=1.02, le=1.5)
+    oversample: int = Field(default=4, ge=1, le=8)
+
+
 class RenderConfig(_Strict):
+    camera: CameraConfig = CameraConfig()
+    title_fade_in_s: float = Field(default=0.35, ge=0.0, le=3.0)
+    title_delay_s: float = Field(default=0.25, ge=0.0, le=5.0)
     encoder: str = Field(default="auto", pattern=r"^[a-z0-9_]+$")
     max_parallel: int = Field(default=0, ge=0, le=64)
     ffmpeg_path: str = "ffmpeg"
@@ -72,6 +82,16 @@ class AudioConfig(_Strict):
     sample_rate: int = 48000
     aac_bitrate: str = Field(default="192k", pattern=r"^[0-9]{2,3}k$")
     fade_ms: int = Field(default=8, ge=0, le=100)
+    loudness_i: float = Field(default=-14.0, ge=-40.0, le=-5.0)  # LUFS (YouTube reference)
+    true_peak: float = Field(default=-1.0, ge=-9.0, le=0.0)  # dBTP
+    lra: float = Field(default=11.0, ge=1.0, le=20.0)
+    sfx_volume_db: float = Field(default=-6.0, ge=-40.0, le=6.0)
+    duck_threshold: float = Field(default=0.02, gt=0.0, le=1.0)
+    duck_ratio: float = Field(default=8.0, ge=1.0, le=20.0)
+    duck_attack_ms: float = Field(default=20.0, ge=0.01, le=2000.0)
+    duck_release_ms: float = Field(default=400.0, ge=0.01, le=9000.0)
+    music_fade_in_s: float = Field(default=1.0, ge=0.0, le=10.0)
+    music_fade_out_s: float = Field(default=2.5, ge=0.0, le=10.0)
 
 
 class RetryConfig(_Strict):

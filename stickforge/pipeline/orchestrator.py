@@ -14,7 +14,14 @@ from stickforge.core.ffmpeg import EncoderParams, FFmpeg
 from stickforge.core.retry import RetryPolicy
 from stickforge.core.security import safe_project_path
 from stickforge.lint import LintWarning, lint_scenes
-from stickforge.pipeline import assemble_stage, audio_stage, image_stage, render_stage, tts_stage
+from stickforge.pipeline import (
+    assemble_stage,
+    audio_stage,
+    captions_stage,
+    image_stage,
+    render_stage,
+    tts_stage,
+)
 from stickforge.pipeline.context import NullReporter, Reporter, RunContext, SceneState
 from stickforge.providers.registry import Registry
 from stickforge.schema import load_project
@@ -87,8 +94,12 @@ async def render(
 
     try:
         # Independent stages: TTS (local CPU) and images (network) overlap.
+        async def voice_then_captions() -> None:
+            await tts_stage.run(ctx)
+            await captions_stage.run(ctx)
+
         async with asyncio.TaskGroup() as tg:
-            tg.create_task(tts_stage.run(ctx))
+            tg.create_task(voice_then_captions())
             tg.create_task(image_stage.run(ctx))
         await render_stage.run(ctx)
         await audio_stage.run(ctx)

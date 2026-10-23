@@ -54,6 +54,9 @@ providers:
   silent:
     adapter: silent
     settings: {words_per_minute: 150}
+  tone:                              # test stub with real loudness (offline tests)
+    adapter: tone
+    settings: {words_per_minute: 150}
 
   # --- Images --------------------------------------------------------------
   gemini_lite:                       # "Nano-Banana 2 Lite": fastest/cheapest, <= 3 refs
@@ -89,6 +92,15 @@ providers:
   placeholder:
     adapter: placeholder
 
+  # --- Caption alignment (per scene, first that works) ----------------------
+  tts_timestamps:                    # free + exact when the TTS returns word timings
+    adapter: tts_timestamps
+  whisperx:                          # optional extra; forced alignment, CPU ok
+    adapter: whisperx
+    settings: {language: en, device: cpu}
+  scene_level:                       # always available: proportional estimate
+    adapter: scene_level
+
   # --- LLM / QA --------------------------------------------------------------
   gemini_qa:
     adapter: litellm_vision_qa
@@ -110,11 +122,13 @@ modes:
     fps: 30
     x264_preset: veryfast
     crf: 23
+    camera_oversample: 2   # faster drafts; final uses render.camera.oversample (4)
     qa: false
     chains:
       tts: [kokoro, silent]   # fp32: on x86 CPUs it measured ~4x faster than int8
       image: [gemini_lite, fal_schnell, placeholder]
       vision_qa: [gemini_qa]
+      align: [tts_timestamps, whisperx, scene_level]
   final:
     width: 1920
     height: 1080
@@ -126,8 +140,15 @@ modes:
       tts: [kokoro, silent]
       image: [gemini_flash, gemini_lite, fal_schnell, placeholder]
       vision_qa: [gemini_qa]
+      align: [tts_timestamps, whisperx, scene_level]
 
 render:
+  camera:
+    zoom_amount: 0.12    # slow_zoom_in/out: 1.00 <-> 1.12
+    pan_zoom: 1.12       # pans run at this zoom
+    oversample: 4        # zoompan internal resolution multiple (4 = ~0.2 px jitter)
+  title_delay_s: 0.25    # on-screen text appears after this, fading in
+  title_fade_in_s: 0.35
   encoder: auto          # auto | libx264 | h264_nvenc | h264_videotoolbox | h264_qsv
   max_parallel: 0        # 0 = auto (cpu_count // 2, min 1)
   ffmpeg_path: ffmpeg
@@ -139,3 +160,13 @@ audio:
   sample_rate: 48000
   aac_bitrate: 192k
   fade_ms: 8             # fade in/out on every voice clip (no clicks at joins)
+  loudness_i: -14.0      # integrated loudness target, LUFS (YouTube reference)
+  true_peak: -1.0        # dBTP ceiling
+  lra: 11.0
+  sfx_volume_db: -6.0
+  duck_threshold: 0.02   # music ducking (sidechain compressor keyed by the voice)
+  duck_ratio: 8.0
+  duck_attack_ms: 20
+  duck_release_ms: 400
+  music_fade_in_s: 1.0
+  music_fade_out_s: 2.5
