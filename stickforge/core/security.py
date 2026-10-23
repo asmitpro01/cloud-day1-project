@@ -137,3 +137,40 @@ def validate_image(path: Path, *, max_bytes: int = MAX_IMAGE_BYTES) -> tuple[int
     except Exception as e:
         raise MediaValidationError(f"invalid image: {e}") from None
     return w, h
+
+
+def save_image_as_png(
+    data: bytes, out: Path, *, max_bytes: int = MAX_IMAGE_BYTES
+) -> tuple[int, int]:
+    """Validate untrusted image bytes and re-encode them as a clean PNG (drops metadata)."""
+    import io
+
+    from PIL import Image
+
+    if not data or len(data) > max_bytes:
+        raise MediaValidationError(f"image payload size {len(data)} out of bounds")
+    try:
+        with Image.open(io.BytesIO(data)) as im:
+            if im.format not in {"PNG", "JPEG", "WEBP"}:
+                raise MediaValidationError(f"unsupported image format {im.format}")
+            w, h = im.size
+            if w * h > MAX_IMAGE_PIXELS or w < 16 or h < 16:
+                raise MediaValidationError(f"image dimensions {w}x{h} out of bounds")
+            im.load()
+            im.convert("RGB").save(out, format="PNG")
+    except MediaValidationError:
+        raise
+    except Exception as e:
+        raise MediaValidationError(f"invalid image: {e}") from None
+    return w, h
+
+
+def image_mime(path: Path) -> str:
+    """MIME type of a validated local image (for inline uploads)."""
+    from PIL import Image
+
+    with Image.open(path) as im:
+        fmt = im.format
+    return {"PNG": "image/png", "JPEG": "image/jpeg", "WEBP": "image/webp"}.get(
+        fmt or "", "application/octet-stream"
+    )
