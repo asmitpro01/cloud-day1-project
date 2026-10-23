@@ -27,6 +27,7 @@ def _write_silence(path: Path, seconds: float) -> None:
 class SilentTTS(Adapter):
     adapter_name: ClassVar[str] = "silent"
     kind: ClassVar[Kind] = Kind.TTS
+    capabilities: ClassVar[frozenset[str]] = frozenset({"stub"})
     default_max_concurrency: ClassVar[int] = 16
     license_note: ClassVar[str] = "silent test stub (no voice)"
 
