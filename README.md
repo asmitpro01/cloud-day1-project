@@ -113,7 +113,7 @@ set its `seed`.
 | Capability | draft chain | final chain |
 |---|---|---|
 | Voice | Kokoro (local) → silent stub | same |
-| Images | Gemini `gemini-3.1-flash-lite-image` → placeholder | Gemini `gemini-3.1-flash-image` (2K) → flash-lite → placeholder |
+| Images | Pollinations FLUX schnell → Gemini `gemini-3.1-flash-lite-image` → placeholder | Gemini `gemini-3.1-flash-image` (2K) → flash-lite → Pollinations → placeholder |
 | Vision QA | (off) | Gemini `gemini-3.8-flash` via litellm |
 | Caption timing | TTS timestamps → WhisperX (if installed) → estimate | same |
 

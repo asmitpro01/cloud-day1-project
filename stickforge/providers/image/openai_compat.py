@@ -3,6 +3,8 @@
 Works with OpenAI and any server exposing the same API. Bearer auth.
 settings:
   size:        e.g. "1536x864" (16:9; GPT image models accept WxH divisible by 16)
+  send_seed:   true for servers that accept a `seed` field (e.g. Pollinations); OpenAI
+               itself does not, so it is off by default
   extra:       additional request fields (e.g. {"quality": "medium"})
   media_hosts: hosts allowed for `url` responses (b64_json responses need none)
 cost: per_image_usd
@@ -44,6 +46,11 @@ class OpenAICompatImage(Adapter):
     cost_model: ClassVar[str] = "per image (cost.per_image_usd)"
     license_note: ClassVar[str] = "output terms of the configured provider/model"
 
+    def has(self, capability: str) -> bool:
+        if capability == "seed":
+            return bool(self.config.settings.get("send_seed"))
+        return super().has(capability)
+
     async def generate(
         self,
         prompt: str,
@@ -65,6 +72,8 @@ class OpenAICompatImage(Adapter):
             "size": size,
             **self.config.settings.get("extra", {}),
         }
+        if self.has("seed"):
+            body["seed"] = seed
         url = f"{(self.config.endpoint or DEFAULT_ENDPOINT).rstrip('/')}/images/generations"
         try:
             async with http.client(self.config.timeout_s) as c:
@@ -102,5 +111,6 @@ class OpenAICompatImage(Adapter):
             model=model,
             width=w,
             height=h,
+            seed=seed if self.has("seed") else None,
             cost_usd=self.cost_rate("per_image_usd"),
         )

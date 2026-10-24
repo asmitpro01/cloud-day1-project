@@ -163,3 +163,9 @@ Short log of choices made where the spec left room. Newest at the bottom.
 - **fal removed from the default image chains** (user request): it was only a
   fallback behind Gemini. The adapter and its `fal_schnell` config entry stay so it
   can be re-enabled by adding it to a chain in `config.yaml`.
+- **Pollinations** (user request) is wired through the existing `openai_compat`
+  adapter — its `/v1/images/generations` is OpenAI-compatible (verified against the
+  project's APIDOCS.md on GitHub; the API host itself is blocked from the build box, so
+  it is tested with mocked HTTP only). Added a `send_seed` setting because Pollinations
+  accepts `seed` and OpenAI does not. First in the draft chain (cheap FLUX schnell),
+  after Gemini in final. 402 (Pollen exhausted) is a permanent error → next provider.
