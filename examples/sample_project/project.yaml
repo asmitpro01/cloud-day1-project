@@ -1,0 +1,17 @@
+title: "Why the Sky Is Blue (sample)"
+style:
+  palette: ["#F4F1EA", "#1D1D1D", "#E63946", "#457B9D", "#F4A261"]
+  line_style: "thick clean black outlines, flat colors, minimal shading"
+  background: "plain warm off-white background"
+cast:
+  - name: Max
+    description: "a classic stickman with a round head, dot eyes and a red scarf"
+voice:
+  id: af_heart
+  speed: 1.0
+output:
+  filename: sample.mp4
+  transition: crossfade
+  crossfade_s: 0.4
+  scene_padding_s: 0.35
+  burn_in_captions: true
