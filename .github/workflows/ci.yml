@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: app
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      NEXT_PUBLIC_APP_URL: http://localhost:3100
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/app
+      TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/app_test
+      BETTER_AUTH_SECRET: ci-only-secret-ci-only-secret-ci-only-secret
+      EMAIL_FROM: CI <ci@example.com>
+      EMAIL_PROVIDER: console
+      OTP_PROVIDER: console
+      PAYMENTS_PROVIDER: fake
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: psql postgres://postgres:postgres@localhost:5432/app -c "create database app_test"
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm format:check
+      - run: pnpm test
+      - run: pnpm test:int
+      - run: pnpm db:migrate
+      - name: Build (production checks for public env only)
+        run: pnpm build
+        env:
+          EMAIL_PROVIDER: resend
+          RESEND_API_KEY: re_ci_placeholder
+          OTP_PROVIDER: none
+          PAYMENTS_PROVIDER: none
+      - run: pnpm check:bundle
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm test:e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: playwright-report

@@ -1,6 +1,6 @@
 # Phase 0 Plan
 
-Status: **awaiting approval**. Versions checked on npm (2026-10-24): Next 16.4, React 19.3, Better Auth 1.7,
+Status: **built** (all six phases). See "As built" at the end for where the build deviated from this plan. Versions checked on npm (2026-10-24): Next 16.4, React 19.3, Better Auth 1.7,
 Drizzle ORM 0.45 / drizzle-kit 0.31, Zod 4.6, Tailwind 4.3, Vitest 5, Playwright 1.64, @react-pdf/renderer 4.9.
 
 ---
@@ -309,3 +309,24 @@ by hand), t3-env, Upstash, MDX. One-off `npx @better-auth/cli generate` is used 
   The `console` OTP adapter keeps local dev unblocked, and the README explains DLT for go-live.
 - **Razorpay account activation** requires Terms, Privacy, Refund, Shipping/Delivery and Contact pages, which ship in Phase 1.
 - **Webhooks can't reach localhost**: covered by verify-on-checkout (§5). The README shows a tunnel for renewals.
+
+---
+
+## As built: changes from this plan
+
+- **React Email 6**: `@react-email/components` is deprecated; components and `render` come from `react-email`.
+- **Better Auth schema**: written by hand in `src/server/db/schema/auth.ts` and checked against `getAuthTables()`
+  (the CLI can't load a config that imports `server-only`).
+- **Rate limiting**: Better Auth's in-memory limiter is off; one Postgres-backed limiter (`rate_limits`) runs in auth hooks.
+- **Optional providers**: `OTP_PROVIDER=none` hides phone login and `PAYMENTS_PROVIDER=none` hides billing, so the
+  landing page can go live before MSG91/Razorpay are ready. `PAYMENTS_PROVIDER=fake` is an offline Razorpay simulator.
+- **Invoices table**: one `tax_rate_bps` plus `supply_type` instead of per-component rate columns (handles odd
+  rates such as 0.25%). A CHECK constraint enforces `total = taxable + cgst + sgst + utgst + igst`.
+- **Invoice maths** always starts from the amount actually charged, so invoice totals equal payments. Exclusive
+  pricing adds GST when computing the charge (`chargeAmountFor`).
+- **PDFs** render after the invoice transaction commits (short numbering lock) and are stored once in `invoice_pdfs`.
+- **Next.js 16.4 Cache Components** is on: session-dependent UI sits in `<Suspense>`; dashboard and admin routes are
+  partially prerendered.
+- **Stale webhooks**: provider event time is compared with `last_event_at`; same-second events apply unless they would
+  move a subscription back to `created`/`authenticated`.
+- **Seed** invoices use a separate `DEMO` series so they never consume real invoice numbers.

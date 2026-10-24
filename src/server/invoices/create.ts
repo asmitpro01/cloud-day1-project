@@ -60,6 +60,7 @@ async function describePurchase(tx: Tx, payment: PaymentRow): Promise<string> {
 export async function createInvoiceForPayment(
   tx: Tx,
   payment: PaymentRow,
+  options: { series?: string; issuedAt?: Date } = {},
 ): Promise<{ invoice: InvoiceRow; created: boolean }> {
   const [existing] = await tx.select().from(invoices).where(eq(invoices.paymentId, payment.id));
   if (existing) return { invoice: existing, created: false };
@@ -105,8 +106,8 @@ export async function createInvoiceForPayment(
     },
   ];
 
-  const issuedAt = new Date();
-  const number = await allocateInvoiceNumber(tx, issuedAt);
+  const issuedAt = options.issuedAt ?? new Date();
+  const number = await allocateInvoiceNumber(tx, issuedAt, options.series);
   const [invoice] = await tx
     .insert(invoices)
     .values({

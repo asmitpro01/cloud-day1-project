@@ -10,22 +10,26 @@ Next.js 16 (App Router, Server Actions, Turbopack, Cache Components) · React 19
 shadcn/ui · PostgreSQL + Drizzle ORM (postgres.js driver) · Better Auth · Resend + React Email 6 (`react-email`) ·
 Razorpay · @react-pdf/renderer · Zod 4 · Vitest · Playwright · pnpm
 
-## Commands (available from Phase 1)
+## Commands
 
 ```bash
-pnpm dev               # dev server
+pnpm dev               # dev server (Turbopack)
 pnpm build             # production build
-pnpm typecheck         # tsc --noEmit
+pnpm typecheck         # next typegen && tsc --noEmit
 pnpm lint              # eslint . (Next 16 has no `next lint`)
-pnpm format            # prettier --write .
+pnpm format            # prettier --write . (format:check in CI)
 pnpm test              # vitest run (unit)
-pnpm test:int          # vitest run integration tests (needs TEST_DATABASE_URL)
-pnpm test:e2e          # playwright
-pnpm db:generate       # drizzle-kit generate (after schema edits)
+pnpm test:int          # vitest against TEST_DATABASE_URL (database is reset)
+pnpm test:e2e          # playwright smoke test (starts next dev on :3100 with offline providers)
+pnpm db:generate       # drizzle-kit generate (after schema edits), then commit drizzle/
 pnpm db:migrate        # apply migrations
-pnpm bootstrap         # migrate + sync plans to Razorpay + optional seed
-pnpm email:dev         # React Email preview
-docker compose up -d   # local Postgres 17
+pnpm db:seed           # demo data (dev databases only; invoices use the DEMO series)
+pnpm bootstrap         # validate env + migrate + plans:sync [--seed]
+pnpm plans:sync        # create provider plans for src/config/plans.ts
+pnpm admin:grant <e>   # give a user the admin role
+pnpm check:bundle      # after build: fail if secrets reach the client bundle
+pnpm email:dev         # React Email preview on :3001
+docker compose up -d   # local Postgres 17 (app + app_test databases)
 ```
 
 ## Phase workflow

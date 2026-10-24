@@ -37,7 +37,8 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   cacheComponents: true,
   partialPrefetching: true,
-  output: "standalone",
+  // The Dockerfile builds with NEXT_OUTPUT=standalone; Vercel and `pnpm start` use the default output.
+  output: process.env.NEXT_OUTPUT === "standalone" ? "standalone" : undefined,
   poweredByHeader: false,
   // @react-pdf/renderer ships its own font engine and must stay a Node dependency.
   serverExternalPackages: ["@react-pdf/renderer"],

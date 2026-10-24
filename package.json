@@ -21,7 +21,9 @@
     "check": "pnpm typecheck && pnpm lint && pnpm test",
     "plans:sync": "tsx --tsconfig scripts/tsconfig.json --env-file-if-exists=.env scripts/sync-plans.ts",
     "bootstrap": "tsx --tsconfig scripts/tsconfig.json --env-file-if-exists=.env scripts/bootstrap.ts",
-    "admin:grant": "tsx --tsconfig scripts/tsconfig.json --env-file-if-exists=.env scripts/make-admin.ts"
+    "admin:grant": "tsx --tsconfig scripts/tsconfig.json --env-file-if-exists=.env scripts/make-admin.ts",
+    "db:seed": "tsx --tsconfig scripts/tsconfig.json --env-file-if-exists=.env scripts/seed.ts",
+    "check:bundle": "tsx --env-file-if-exists=.env scripts/check-client-bundle.ts"
   },
   "dependencies": {
     "@react-pdf/renderer": "4.9.0",
