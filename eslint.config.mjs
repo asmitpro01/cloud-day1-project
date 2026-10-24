@@ -25,7 +25,7 @@ const eslintConfig = defineConfig([
   },
   {
     // Files that legitimately read process.env or print to the console.
-    files: ["src/env/**", "src/instrumentation.ts", "*.config.ts", "*.config.mts", "e2e/**", "scripts/**"],
+    files: ["src/env/**", "src/instrumentation.ts", "*.config.ts", "*.config.mts", "e2e/**", "scripts/**", "test/**"],
     rules: { "no-restricted-syntax": "off", "no-console": "off" },
   },
   {
