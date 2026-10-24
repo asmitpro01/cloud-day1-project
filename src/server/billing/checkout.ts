@@ -13,6 +13,7 @@ import type { CheckoutResponse, PaymentProvider } from "../providers/payments";
 import { billingErrors } from "./errors";
 import type { BillingFollowUp } from "./follow-ups";
 import { afterPaymentCaptured, upsertPayment } from "./payments";
+import { chargeAmountPaise } from "./pricing";
 import { ensureProviderPlan, totalCountFor } from "./provider-plans";
 import { applySubscriptionSnapshot, getCurrentSubscription, observedNow } from "./subscriptions";
 
@@ -86,21 +87,22 @@ export async function startCheckout(
   }
 
   const product = getProduct(request.productKey);
+  const amountPaise = chargeAmountPaise(product.price);
   const receipt = `rcpt_${randomUUID().replaceAll("-", "")}`;
   const remote = await provider.createOrder({
-    amountPaise: product.price,
+    amountPaise,
     receipt,
     notes: { user_id: user.id, product_key: product.key },
   });
   await db.insert(orders).values({
     userId: user.id,
     productKey: product.key,
-    amountPaise: product.price,
+    amountPaise,
     provider: provider.name,
     providerOrderId: remote.id,
     receipt,
   });
-  return { ...base, kind: "order", orderId: remote.id, amountPaise: product.price, description: product.name };
+  return { ...base, kind: "order", orderId: remote.id, amountPaise, description: product.name };
 }
 
 export type VerifiedCheckout = {

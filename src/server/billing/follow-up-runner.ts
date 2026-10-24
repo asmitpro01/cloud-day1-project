@@ -1,4 +1,5 @@
 import "server-only";
+import { sendInvoiceEmail } from "../invoices/email";
 import { logger } from "../logger";
 import type { BillingFollowUp } from "./follow-ups";
 
@@ -8,7 +9,7 @@ export async function runBillingFollowUps(followUps: BillingFollowUp[]): Promise
     try {
       switch (followUp.type) {
         case "send-invoice-email":
-          // Wired up with GST invoices (Phase 4).
+          await sendInvoiceEmail(followUp.invoiceId);
           break;
       }
     } catch (error) {

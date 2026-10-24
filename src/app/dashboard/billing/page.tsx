@@ -198,6 +198,7 @@ async function BillingContent() {
                   <TableHead>Description</TableHead>
                   <TableHead className="text-right">Amount</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead>Invoice</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -213,6 +214,18 @@ async function BillingContent() {
                     <TableCell className="text-right tabular-nums">{formatINR(item.amountPaise)}</TableCell>
                     <TableCell>
                       <StatusBadge status={item.status} />
+                    </TableCell>
+                    <TableCell>
+                      {item.invoice ? (
+                        <a
+                          href={`/api/invoices/${item.invoice.id}/pdf`}
+                          className="text-sm text-primary underline underline-offset-4"
+                        >
+                          {item.invoice.number}
+                        </a>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}

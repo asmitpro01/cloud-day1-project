@@ -1,6 +1,7 @@
 import "server-only";
 import { eq } from "drizzle-orm";
 import type { Tx } from "../db/client";
+import { createInvoiceForPayment } from "../invoices/create";
 import { payments } from "../db/schema";
 import type { ProviderPayment } from "../providers/payments";
 import type { PaymentStatus } from "../providers/payments/types";
@@ -68,9 +69,10 @@ export async function upsertPayment(
 }
 
 /**
- * Runs once a payment is captured, inside the same transaction. Phase 4 issues the GST
- * invoice here; returns work to do after commit.
+ * Runs once a payment is captured, inside the same transaction: issues the GST invoice
+ * (idempotent per payment) and returns the email to send after commit.
  */
-export async function afterPaymentCaptured(_tx: Tx, _payment: PaymentRow): Promise<BillingFollowUp[]> {
-  return [];
+export async function afterPaymentCaptured(tx: Tx, payment: PaymentRow): Promise<BillingFollowUp[]> {
+  const { invoice, created } = await createInvoiceForPayment(tx, payment);
+  return created ? [{ type: "send-invoice-email", invoiceId: invoice.id }] : [];
 }

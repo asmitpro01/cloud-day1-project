@@ -3,7 +3,7 @@ import { desc, eq } from "drizzle-orm";
 import { getPlan, getProduct, isPlanKey, isProductKey } from "@/config/plans";
 import { paise, type Paise } from "@/lib/money";
 import type { DbOrTx } from "../db/client";
-import { orders, payments, subscriptions } from "../db/schema";
+import { invoices, orders, payments, subscriptions } from "../db/schema";
 
 export type PaymentHistoryItem = {
   id: string;
@@ -12,6 +12,7 @@ export type PaymentHistoryItem = {
   amountPaise: Paise;
   status: "created" | "authorized" | "captured" | "failed" | "refunded";
   method: string | null;
+  invoice: { id: string; number: string } | null;
 };
 
 /** The user's payments, newest first, with a human description. */
@@ -26,10 +27,13 @@ export async function getPaymentHistory(db: DbOrTx, userId: string, limit = 50):
       planKey: subscriptions.planKey,
       interval: subscriptions.interval,
       productKey: orders.productKey,
+      invoiceId: invoices.id,
+      invoiceNumber: invoices.invoiceNumber,
     })
     .from(payments)
     .leftJoin(subscriptions, eq(subscriptions.id, payments.subscriptionId))
     .leftJoin(orders, eq(orders.id, payments.orderId))
+    .leftJoin(invoices, eq(invoices.paymentId, payments.id))
     .where(eq(payments.userId, userId))
     .orderBy(desc(payments.createdAt))
     .limit(limit);
@@ -45,6 +49,7 @@ export async function getPaymentHistory(db: DbOrTx, userId: string, limit = 50):
       amountPaise: paise(row.amountPaise),
       status: row.status,
       method: row.method,
+      invoice: row.invoiceId && row.invoiceNumber ? { id: row.invoiceId, number: row.invoiceNumber } : null,
     };
   });
 }

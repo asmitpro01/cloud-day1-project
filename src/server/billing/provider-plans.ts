@@ -7,6 +7,7 @@ import type { DbOrTx } from "../db/client";
 import { providerPlans } from "../db/schema";
 import type { PaymentProvider } from "../providers/payments";
 import { billingErrors } from "./errors";
+import { chargeAmountPaise } from "./pricing";
 
 /** Total billing cycles requested from the provider: about ten years either way. */
 export function totalCountFor(interval: BillingInterval): number {
@@ -46,8 +47,9 @@ export async function ensureProviderPlan(
   planKey: PlanKey,
   interval: BillingInterval,
 ): Promise<{ providerPlanId: string; amountPaise: Paise; created: boolean }> {
-  const amountPaise = getPlanPrice(planKey, interval);
-  if (!amountPaise) throw billingErrors.notForSale();
+  const listPrice = getPlanPrice(planKey, interval);
+  if (!listPrice) throw billingErrors.notForSale();
+  const amountPaise = chargeAmountPaise(listPrice);
 
   const existing = await findProviderPlan(db, provider, planKey, interval, amountPaise);
   if (existing) return { providerPlanId: existing.providerPlanId, amountPaise, created: false };
