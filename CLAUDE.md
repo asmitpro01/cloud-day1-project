@@ -6,9 +6,9 @@ The full plan is in `docs/PLAN.md`.
 
 ## Stack
 
-Next.js 16 (App Router, Server Actions, Turbopack) · React 19 · TypeScript strict · Tailwind CSS v4 · shadcn/ui ·
-PostgreSQL + Drizzle ORM (postgres.js driver) · Better Auth · Resend + React Email · Razorpay ·
-@react-pdf/renderer · Zod 4 · Vitest · Playwright · pnpm
+Next.js 16 (App Router, Server Actions, Turbopack, Cache Components) · React 19 · TypeScript strict · Tailwind CSS v4 ·
+shadcn/ui · PostgreSQL + Drizzle ORM (postgres.js driver) · Better Auth · Resend + React Email 6 (`react-email`) ·
+Razorpay · @react-pdf/renderer · Zod 4 · Vitest · Playwright · pnpm
 
 ## Commands (available from Phase 1)
 
@@ -43,7 +43,8 @@ docker compose up -d   # local Postgres 17
   Never use floats for money, and never divide money without an explicit rounding rule. Tax rates are integer basis points (`1800` = 18%).
 - **Secrets are server-only.** Every module under `src/server/` and `src/env/server.ts` starts with
   `import "server-only"`. The only browser-visible env vars are `NEXT_PUBLIC_*`, read via `src/env/client.ts`.
-- **Never read `process.env` directly** outside `src/env/*`. Import the validated `env` object.
+- **Never read `process.env` directly** outside `src/env/*` (tooling configs, `instrumentation.ts`, `scripts/` and `e2e/`
+  excepted; ESLint enforces this). Call `serverEnv()` on the server or import `clientEnv`.
 - **External providers sit behind adapters** (`src/server/providers/{payments,otp,email}`). App code depends only on
   the interface in `types.ts`, never on `razorpay/`, `msg91.ts` and so on directly.
 - **Business config lives in one place:** `src/config/site.ts` (brand, company, GSTIN, tax rate, SAC, invoice
@@ -84,7 +85,7 @@ scripts/         bootstrap, sync-plans, seed (run with tsx, validate env like th
   Components are rounded half-up to the paise and must sum exactly to the charged total.
 - **Invoices**: numbers are ≤ 16 chars from `A-Z 0-9 / -` and unique per FY. They are allocated inside the same DB
   transaction as the invoice insert, with no gaps or duplicates. Issued invoices are immutable (snapshotted data + stored PDF).
-- **Webhooks**: verify HMAC-SHA256 over the raw `req.text()` body with `timingSafeEqual` *before* parsing. Record
+- **Webhooks**: verify HMAC-SHA256 over the raw `req.text()` body with `timingSafeEqual` _before_ parsing. Record
   `x-razorpay-event-id` in `processed_events` in the same transaction as the handler's writes. Ignore stale
   (out-of-order) subscription events using `last_event_at`.
 - **Idempotency**: every payment side effect is keyed on the provider payment id (unique constraints, not app checks).
@@ -105,7 +106,7 @@ scripts/         bootstrap, sync-plans, seed (run with tsx, validate env like th
   except for adapter contracts.
 - Files are `kebab-case.ts`, components `PascalCase`, functions and variables `camelCase`, constants `SCREAMING_SNAKE`.
 - Named exports only, except where Next.js requires a default (pages, layouts, route files).
-- Keep comments sparse. Explain *why* (especially tax or legal reasoning, with the rule cited), never *what*.
+- Keep comments sparse. Explain _why_ (especially tax or legal reasoning, with the rule cited), never _what_.
   Public helpers in `src/lib` and adapter interfaces get TSDoc.
 - Use typed domain errors (`class PaymentVerificationError extends AppError`) instead of string throws.
 - No `console.log` in committed code except in the `console` dev adapters. Use `src/server/logger.ts`.
@@ -129,6 +130,12 @@ scripts/         bootstrap, sync-plans, seed (run with tsx, validate env like th
 ## Gotchas
 
 - Next 16 uses `src/proxy.ts`, not `middleware.ts`. There is no `next lint`. `cookies()`, `headers()` and `params` are async.
+- Next 16 ships its own docs in `node_modules/next/dist/docs/`. Read them before using an unfamiliar API (see AGENTS.md).
+- Cache Components is on: anything that reads cookies, headers, the session or uncached data must sit inside
+  `<Suspense>` (or use `"use cache"`); otherwise the build fails. Static marketing pages stay fully prerendered.
+- `server-only` throws outside Next.js. Vitest aliases it to `test/server-only-stub.ts`, and scripts run with
+  `tsx --tsconfig scripts/tsconfig.json`, which maps it to the same stub.
+- shadcn/ui components were vendored from the shadcn GitHub registry (new-york-v4); `ui.shadcn.com` is not needed.
 - Tailwind v4 is configured in CSS (`@theme` in `globals.css`). There is no `tailwind.config.js`.
 - Zod 4 uses top-level formats (`z.email()`, `z.url()`) and `error` instead of `message`/`errorMap`.
 - @react-pdf's built-in Helvetica has no ₹ glyph. Register the bundled Noto Sans font.
