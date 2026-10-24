@@ -18,7 +18,9 @@
     "db:migrate": "tsx --tsconfig scripts/tsconfig.json --env-file-if-exists=.env scripts/migrate.ts",
     "db:studio": "drizzle-kit studio",
     "email:dev": "email dev --dir src/emails --port 3001",
-    "check": "pnpm typecheck && pnpm lint && pnpm test"
+    "check": "pnpm typecheck && pnpm lint && pnpm test",
+    "plans:sync": "tsx --tsconfig scripts/tsconfig.json --env-file-if-exists=.env scripts/sync-plans.ts",
+    "bootstrap": "tsx --tsconfig scripts/tsconfig.json --env-file-if-exists=.env scripts/bootstrap.ts"
   },
   "dependencies": {
     "@react-pdf/renderer": "4.9.0",

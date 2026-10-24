@@ -1,17 +1,32 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Suspense } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { getPlan } from "@/config/plans";
 import { getBillingProfile } from "@/server/account/billing-profile";
 import { requireUser } from "@/server/auth/session";
+import { getEntitlements } from "@/server/billing/entitlements";
 import { getDb } from "@/server/db/client";
+import { PageSkeleton } from "./_components/page-skeleton";
 
 export const metadata: Metadata = { title: "Dashboard" };
 
-export default async function DashboardPage() {
+export default function DashboardPage() {
+  return (
+    <Suspense fallback={<PageSkeleton />}>
+      <Overview />
+    </Suspense>
+  );
+}
+
+async function Overview() {
   const user = await requireUser();
-  const billingProfile = await getBillingProfile(getDb(), user.id);
+  const [billingProfile, entitlements] = await Promise.all([
+    getBillingProfile(getDb(), user.id),
+    getEntitlements(user.id),
+  ]);
 
   return (
     <div className="space-y-6">
@@ -39,6 +54,21 @@ export default async function DashboardPage() {
       ) : null}
 
       <div className="grid gap-6 md:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Your plan</CardTitle>
+            <CardDescription>What you can use right now.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3 text-sm">
+            <p className="text-base font-semibold">
+              {entitlements.lifetimeProducts.length > 0 ? "Lifetime Pro" : getPlan(entitlements.planKey).name}
+            </p>
+            <p className="text-muted-foreground">{entitlements.features.size} features unlocked</p>
+            <Button asChild variant="outline" size="sm">
+              <Link href="/dashboard/billing">Manage billing</Link>
+            </Button>
+          </CardContent>
+        </Card>
         <Card>
           <CardHeader>
             <CardTitle>Billing details</CardTitle>

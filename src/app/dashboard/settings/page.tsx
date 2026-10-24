@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { getBillingProfile } from "@/server/account/billing-profile";
 import { getAuthMethods } from "@/server/auth/methods";
 import { requireUser } from "@/server/auth/session";
 import { getDb } from "@/server/db/client";
+import { PageSkeleton } from "../_components/page-skeleton";
 import { BillingProfileForm } from "./_components/billing-profile-form";
 import { EmailForm } from "./_components/email-form";
 import { PhoneForm } from "./_components/phone-form";
@@ -12,17 +14,27 @@ import { SettingsSection } from "./_components/section";
 
 export const metadata: Metadata = { title: "Settings" };
 
-export default async function SettingsPage() {
-  const user = await requireUser();
-  const billingProfile = await getBillingProfile(getDb(), user.id);
-  const methods = getAuthMethods();
-
+export default function SettingsPage() {
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
         <p className="text-muted-foreground">Manage your profile, billing details and privacy.</p>
       </div>
+      <Suspense fallback={<PageSkeleton />}>
+        <SettingsContent />
+      </Suspense>
+    </div>
+  );
+}
+
+async function SettingsContent() {
+  const user = await requireUser();
+  const billingProfile = await getBillingProfile(getDb(), user.id);
+  const methods = getAuthMethods();
+
+  return (
+    <div className="space-y-6">
       <SettingsSection id="profile" title="Profile" description="How we address you.">
         <ProfileForm name={user.name} />
       </SettingsSection>

@@ -12,3 +12,14 @@ export const rateLimits = pgTable(
   },
   (table) => [index("rate_limits_expires_at_idx").on(table.expiresAt)],
 );
+
+/**
+ * Webhook idempotency: one row per provider event id (`x-razorpay-event-id`), inserted in the
+ * same transaction as the event's side effects so a failed handler is retried, not skipped.
+ */
+export const processedEvents = pgTable("processed_events", {
+  eventId: text("event_id").primaryKey(),
+  provider: text("provider").notNull(),
+  eventType: text("event_type").notNull(),
+  receivedAt: timestamptz("received_at").notNull().defaultNow(),
+});

@@ -136,6 +136,8 @@ scripts/         bootstrap, sync-plans, seed (run with tsx, validate env like th
 - Read request data (`await headers()`, `cookies()`, `connection()`) **before** calling `serverEnv()`, `getAuth()` or
   `getDb()` in components and route handlers. Prerendering then stops at the request boundary instead of validating
   runtime env at build time (Docker builds have no secrets).
+- Pages render their static heading directly and wrap per-request content in `<Suspense>` inside the page
+  (see `src/app/dashboard/billing/page.tsx`); otherwise dev "instant navigation" insights flag blocking navigations.
 - React 19 resets `<form action={…}>` fields after every submission, wiping input on validation errors. Use
   `useFormAction` (`onSubmit`) from `src/components/use-form-action.ts` for forms backed by server actions.
 - `server-only` throws outside Next.js. Vitest aliases it to `test/server-only-stub.ts`, and scripts run with
