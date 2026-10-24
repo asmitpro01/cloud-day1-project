@@ -28,6 +28,9 @@ export function SiteHeader() {
         </nav>
         <div className="flex items-center gap-2">
           <ThemeToggle />
+          <Button asChild size="sm" variant="ghost">
+            <Link href="/sign-in">Sign in</Link>
+          </Button>
           <Button asChild size="sm">
             <a href={clientEnv.preorderUrl ?? "/#waitlist"}>Pre-order</a>
           </Button>

@@ -1,17 +1,13 @@
 "use client";
 
-import { useActionState } from "react";
+import { useFormAction } from "@/components/use-form-action";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import type { ActionResult } from "@/lib/result";
 import { joinWaitlistAction } from "../actions";
 
 export function WaitlistForm() {
-  const [state, formAction, pending] = useActionState<ActionResult<{ message: string }> | null, FormData>(
-    joinWaitlistAction,
-    null,
-  );
+  const { state, pending, onSubmit } = useFormAction(joinWaitlistAction);
   const fieldErrors = state && !state.ok ? state.error.fieldErrors : undefined;
 
   if (state?.ok) {
@@ -23,7 +19,7 @@ export function WaitlistForm() {
   }
 
   return (
-    <form action={formAction} className="space-y-4 rounded-xl border bg-card p-6" noValidate>
+    <form onSubmit={onSubmit} className="space-y-4 rounded-xl border bg-card p-6" noValidate>
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor="waitlist-name">Name</Label>

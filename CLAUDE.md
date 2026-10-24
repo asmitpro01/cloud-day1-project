@@ -133,6 +133,11 @@ scripts/         bootstrap, sync-plans, seed (run with tsx, validate env like th
 - Next 16 ships its own docs in `node_modules/next/dist/docs/`. Read them before using an unfamiliar API (see AGENTS.md).
 - Cache Components is on: anything that reads cookies, headers, the session or uncached data must sit inside
   `<Suspense>` (or use `"use cache"`); otherwise the build fails. Static marketing pages stay fully prerendered.
+- Read request data (`await headers()`, `cookies()`, `connection()`) **before** calling `serverEnv()`, `getAuth()` or
+  `getDb()` in components and route handlers. Prerendering then stops at the request boundary instead of validating
+  runtime env at build time (Docker builds have no secrets).
+- React 19 resets `<form action={…}>` fields after every submission, wiping input on validation errors. Use
+  `useFormAction` (`onSubmit`) from `src/components/use-form-action.ts` for forms backed by server actions.
 - `server-only` throws outside Next.js. Vitest aliases it to `test/server-only-stub.ts`, and scripts run with
   `tsx --tsconfig scripts/tsconfig.json`, which maps it to the same stub.
 - shadcn/ui components were vendored from the shadcn GitHub registry (new-york-v4); `ui.shadcn.com` is not needed.
