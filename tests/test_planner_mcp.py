@@ -157,6 +157,8 @@ def test_plan_limits(tmp_path: Path):
         asyncio.run(plan_script("   ", cfg, use_llm=False))
     with pytest.raises(PlanError, match="characters"):
         asyncio.run(plan_script("word " * 20_000, cfg, use_llm=False))
+    with pytest.raises(PlanError, match="scene 1"):  # one giant token, no spaces
+        asyncio.run(plan_script("x" * 6000, cfg, use_llm=False))
 
 
 def test_write_project_is_valid_and_guarded(tmp_path: Path):

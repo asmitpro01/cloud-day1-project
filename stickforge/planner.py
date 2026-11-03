@@ -126,17 +126,20 @@ def rule_based_scenes(chunks: list[str], cast_name: str, title: str) -> list[Sce
             if with_cast
             else f"A clean, text-free diagram illustrating: {subject}"
         )
-        scenes.append(
-            Scene(
-                id=i + 1,
-                narration=narration,
-                visual=visual[:4000],
-                characters=[cast_name] if with_cast else [],
-                shot=shot,
-                camera=_CAMERAS[i % len(_CAMERAS)],
-                on_screen_text=title[:60] if i == 0 else "",
+        try:
+            scenes.append(
+                Scene(
+                    id=i + 1,
+                    narration=narration,
+                    visual=visual[:4000],
+                    characters=[cast_name] if with_cast else [],
+                    shot=shot,
+                    camera=_CAMERAS[i % len(_CAMERAS)],
+                    on_screen_text=title[:60] if i == 0 else "",
+                )
             )
-        )
+        except ValidationError as e:  # e.g. one "word" longer than the narration limit
+            raise PlanError(f"scene {i + 1}: {e.errors()[0]['msg']}") from None
     return scenes
 
 
