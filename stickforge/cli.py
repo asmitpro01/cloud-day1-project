@@ -183,6 +183,57 @@ def validate(project: ProjectArg) -> None:
     )
 
 
+@app.command()
+def new(
+    project: Annotated[Path, typer.Argument(help="Folder to create the project in")],
+    script: Annotated[
+        Path,
+        typer.Option("--script", "-s", help="Narration script (plain text)", exists=True),
+    ],
+    title: Annotated[str | None, typer.Option(help="Video title (default: guessed)")] = None,
+    llm: Annotated[
+        bool, typer.Option("--llm/--no-llm", help="Plan scenes with the configured LLM")
+    ] = True,
+    overwrite: Annotated[bool, typer.Option(help="Replace an existing scene plan")] = False,
+    config: ConfigOpt = None,
+) -> None:
+    """Turn a narration script into a project (project.yaml + scenes.json)."""
+    from stickforge.planner import PlanError, plan_script, write_project
+
+    cfg = _config(config)
+    try:
+        text = script.read_text(encoding="utf-8")
+        plan = asyncio.run(plan_script(text, cfg, title=title, use_llm=llm))
+        write_project(project, plan, overwrite=overwrite)
+    except (PlanError, ProjectError, UnicodeDecodeError) as e:
+        console.print(f"[red]could not create project:[/red] {e}", highlight=False)
+        raise typer.Exit(1) from None
+    for n in plan.notes:
+        console.print(f"[yellow]note[/yellow] {n}", highlight=False)
+    console.print(
+        f"[green]created[/green] {project}: {len(plan.scenes)} scenes, planner {plan.source}"
+        f"{f', ${plan.cost_usd:.4f}' if plan.cost_usd else ''}. "
+        f"Next: stickforge render {project} --draft",
+        highlight=False,
+    )
+
+
+@app.command()
+def mcp(
+    root: Annotated[
+        Path, typer.Option("--root", help="Workspace folder; projects live directly inside it")
+    ] = Path("stickforge-projects"),
+    config: ConfigOpt = None,
+) -> None:
+    """Run the MCP server on stdio (for Claude Desktop, Claude Code and other MCP clients)."""
+    if importlib.util.find_spec("mcp") is None:
+        console.print("[red]the MCP extra is not installed:[/red] uv sync --extra mcp")
+        raise typer.Exit(2)
+    from stickforge.mcp_server import serve
+
+    serve(root, _config(config))
+
+
 class _RichReporter:
     def __init__(self, progress: Progress) -> None:
         self.p = progress

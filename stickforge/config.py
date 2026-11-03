@@ -115,9 +115,19 @@ class QAConfig(_Strict):
     max_retries: int = Field(default=2, ge=0, le=10)  # re-rolls per scene before flagging
 
 
+class PlannerConfig(_Strict):
+    """Script -> scene plan (`stickforge new`). Falls back to a rule-based splitter."""
+
+    chain: list[str] = Field(default_factory=list)  # LLM providers, in fallback order
+    max_words_per_scene: int = Field(default=35, ge=5, le=200)
+    max_scenes: int = Field(default=300, ge=1, le=2000)
+    max_script_chars: int = Field(default=60_000, ge=100, le=500_000)
+
+
 class EngineConfig(_Strict):
     seed: int = 1234
     qa: QAConfig = QAConfig()
+    planner: PlannerConfig = PlannerConfig()
     models_dir: str = ""  # "" = per-user default; env STICKFORGE_MODELS_DIR overrides
     retry: RetryConfig = RetryConfig()
     models: dict[str, ModelFile] = Field(default_factory=dict)
@@ -135,6 +145,9 @@ class EngineConfig(_Strict):
                 for n in names:
                     if n not in self.providers:
                         raise ValueError(f"modes.{mode_name}.chains.{cap}: unknown provider {n!r}")
+        for n in self.planner.chain:
+            if n not in self.providers:
+                raise ValueError(f"planner.chain: unknown provider {n!r}")
         for required in ("draft", "final"):
             if required not in self.modes:
                 raise ValueError(f"modes.{required} is required")

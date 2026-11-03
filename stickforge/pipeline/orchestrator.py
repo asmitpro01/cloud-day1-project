@@ -145,6 +145,7 @@ async def render(
             output_info = {
                 "video": str(output),
                 "srt": str(ctx.artifacts.get("srt", "")),
+                "vtt": str(ctx.artifacts.get("vtt", "")),
                 "duration_s": round(ctx.total_frames() / ctx.fps, 3),
                 "width": mode_cfg.width,
                 "height": mode_cfg.height,
