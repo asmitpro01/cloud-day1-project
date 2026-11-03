@@ -1,0 +1,50 @@
+# stickforge engine defaults. A config.yaml in the working directory (or --config /
+# STICKFORGE_CONFIG) is deep-merged over this file. Secrets never go here: reference
+# them by environment variable name via `api_key_env`.
+
+seed: 1234
+cache_dir: .cache        # relative to the project folder
+output_dir: renders      # relative to the project folder
+
+providers:
+  silent:
+    adapter: silent
+    settings:
+      words_per_minute: 150   # duration estimate for the silent stub
+  placeholder:
+    adapter: placeholder
+
+modes:
+  draft:
+    width: 1280
+    height: 720
+    fps: 30
+    x264_preset: veryfast
+    crf: 23
+    qa: false
+    chains:
+      tts: [silent]
+      image: [placeholder]
+  final:
+    width: 1920
+    height: 1080
+    fps: 30
+    x264_preset: medium
+    crf: 18
+    qa: true
+    chains:
+      tts: [silent]
+      image: [placeholder]
+
+render:
+  encoder: auto          # auto | libx264 | h264_nvenc | h264_videotoolbox | h264_qsv
+  max_parallel: 0        # 0 = auto (cpu_count // 2, min 1)
+  ffmpeg_path: ffmpeg
+  ffprobe_path: ffprobe
+  timeout_base_s: 60     # per ffmpeg run: base + per_second * media seconds
+  timeout_per_media_s: 10
+
+audio:
+  sample_rate: 48000
+  aac_bitrate: 192k
+  fade_ms: 8             # fade in/out on every voice clip (no clicks at joins)

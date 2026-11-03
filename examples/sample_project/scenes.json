@@ -1,0 +1,13 @@
+[
+  {"id": 1, "narration": "Have you ever wondered why the sky is blue on a clear day?",
+   "visual": "Max stands on a grassy hill looking up at a wide open sky with a few clouds",
+   "characters": ["Max"], "shot": "wide", "camera": "slow_zoom_in",
+   "on_screen_text": "Why is the sky blue?"},
+  {"id": 2, "narration": "Sunlight looks white, but it is really a mix of every color of the rainbow, all travelling together.",
+   "visual": "A beam of sunlight splits through a prism into a rainbow fan of colors",
+   "characters": [], "shot": "diagram", "camera": "pan_right", "on_screen_text": ""},
+  {"id": 3, "narration": "Air molecules scatter short blue waves far more than red ones, so blue reaches your eyes from every direction.",
+   "visual": "Max points at small blue arrows bouncing off tiny air molecules toward his eyes",
+   "characters": ["Max"], "shot": "medium", "camera": "slow_zoom_out",
+   "on_screen_text": "Rayleigh scattering"}
+]
