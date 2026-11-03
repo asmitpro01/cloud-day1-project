@@ -66,3 +66,7 @@ disallow_any_explicit = false
 testpaths = ["tests"]
 asyncio_mode = "auto"
 markers = ["integration: renders real video with ffmpeg (slower)"]
+
+[[tool.mypy.overrides]]
+module = ["whisperx", "whisperx.*", "kokoro_onnx", "kokoro_onnx.*", "litellm", "litellm.*"]
+ignore_missing_imports = true   # optional extras; may be absent where mypy runs

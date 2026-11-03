@@ -11,5 +11,7 @@ voice:
   speed: 1.0
 output:
   filename: sample.mp4
-  transition: cut
+  transition: crossfade
+  crossfade_s: 0.4
   scene_padding_s: 0.35
+  burn_in_captions: true

@@ -1,19 +1,34 @@
-"""Stage 7: per-scene voice padded to the exact scene length, then concatenated.
+"""Stage 7: scene audio -> voice track -> music ducking -> two-pass loudnorm.
 
-Each scene's audio is exactly ``frames * sample_rate / fps`` samples, so the voice track
-cannot drift from the video regardless of length.
+Each scene's audio is exactly ``frames * sample_rate / fps`` samples (voice + padding,
+optional SFX at the scene start), so the soundtrack cannot drift from the video. Mixing
+runs in 32-bit float so nothing clips before loudness normalization.
 """
 
 from __future__ import annotations
 
 import asyncio
+import math
+from collections.abc import Callable
+from pathlib import Path
 
-from stickforge.core.cache import atomic_write_text, canonical_key
-from stickforge.core.ffmpeg import build_concat_copy, build_scene_audio, concat_list_text
+from stickforge.core.cache import atomic_write_text, canonical_key, file_sha256
+from stickforge.core.ffmpeg import (
+    DuckParams,
+    LoudnessTarget,
+    build_concat_copy,
+    build_loudnorm_apply,
+    build_loudnorm_measure,
+    build_music_mix,
+    build_scene_audio_mix,
+    concat_list_text,
+    parse_loudnorm,
+)
 from stickforge.pipeline.context import RunContext, SceneState
 from stickforge.pipeline.util import run_all
 
-AUDIO_VERSION = 1
+AUDIO_VERSION = 2
+SILENCE_LUFS = -70.0  # below this, loudnorm has nothing to normalize
 
 
 def scene_samples(frames: int, fps: int, sample_rate: int) -> int:
@@ -23,72 +38,165 @@ def scene_samples(frames: int, fps: int, sample_rate: int) -> int:
     return num // fps
 
 
+async def _cached(
+    ctx: RunContext, key: str, suffix: str, args_for: Callable[[Path], list[str]], timeout_s: float
+) -> Path:
+    """Run an ffmpeg job whose output is cached under ``key``."""
+    hit = None if ctx.force else ctx.cache.get(key)
+    if hit is not None:
+        return hit.path
+    tmp = ctx.cache.tmp_path(key, suffix)
+    try:
+        await ctx.ffmpeg.run(args_for(tmp), timeout_s=timeout_s)
+        return ctx.cache.commit(key, tmp, suffix, {}).path
+    except BaseException:
+        ctx.cache.discard(tmp)
+        raise
+
+
 async def run(ctx: RunContext) -> None:
     acfg = ctx.config.audio
+    sr = acfg.sample_rate
     limit = asyncio.Semaphore(ctx.config.render.parallelism() * 2)
-    ctx.reporter.stage("audio", len(ctx.scenes) + 1)
+    ctx.reporter.stage("audio", len(ctx.scenes) + 3)
 
     async def one(st: SceneState) -> None:
         assert st.audio is not None and st.audio_key is not None
-        samples = scene_samples(st.frames, ctx.fps, acfg.sample_rate)
+        samples = scene_samples(st.frames, ctx.fps, sr)
+        sfx_path, sfx_s, sfx_hash = None, 0.0, None
+        if st.scene.sfx:
+            sfx_path = ctx.project.resolve(st.scene.sfx)
+            sfx_s = await ctx.ffmpeg.validate_audio(sfx_path, max_s=600)
+            sfx_hash = file_sha256(sfx_path)
         key = canonical_key(
             {
                 "stage": "scene_audio",
                 "v": AUDIO_VERSION,
                 "voice": st.audio_key,
                 "samples": samples,
-                "sr": acfg.sample_rate,
+                "sr": sr,
                 "fade_ms": acfg.fade_ms,
+                "sfx": sfx_hash,
+                "sfx_db": acfg.sfx_volume_db,
             }
         )
-        hit = None if ctx.force else ctx.cache.get(key)
-        cached = hit is not None
-        if hit is None:
-            tmp = ctx.cache.tmp_path(key, ".wav")
-            args = build_scene_audio(
+        cached = not ctx.force and ctx.cache.get(key) is not None
+        assert st.audio is not None
+        voice = st.audio
+
+        def args(tmp: Path) -> list[str]:
+            return build_scene_audio_mix(
                 ctx.ffmpeg.ffmpeg,
-                st.audio.path,
+                voice.path,
                 tmp,
-                voice_s=st.audio.duration_s,
+                voice_s=voice.duration_s,
                 samples=samples,
-                sample_rate=acfg.sample_rate,
+                sample_rate=sr,
                 fade_ms=acfg.fade_ms,
+                sfx=sfx_path,
+                sfx_s=sfx_s,
+                sfx_volume_db=acfg.sfx_volume_db,
             )
-            try:
-                async with limit:
-                    await ctx.ffmpeg.run(
-                        args, timeout_s=ctx.ffmpeg.timeout_for(st.duration_s(ctx.fps))
-                    )
-                hit = ctx.cache.commit(key, tmp, ".wav", {"samples": samples})
-            except BaseException:
-                ctx.cache.discard(tmp)
-                raise
-        st.scene_audio, st.scene_audio_key = hit.path, key
+
+        async with limit:
+            st.scene_audio = await _cached(
+                ctx, key, ".wav", args, ctx.ffmpeg.timeout_for(st.duration_s(ctx.fps))
+            )
+        st.scene_audio_key = key
         st.cache_hits["scene_audio"] = cached
         ctx.reporter.advance("audio", cached=cached)
 
     await run_all(one, ctx.scenes)
+    total_s = ctx.total_frames() / ctx.fps
+    total_samples = scene_samples(ctx.total_frames(), ctx.fps, sr)
+    long_timeout = ctx.ffmpeg.timeout_for(total_s / 4)
 
-    keys = [s.scene_audio_key for s in ctx.scenes]
-    key = canonical_key({"stage": "voice_track", "v": AUDIO_VERSION, "parts": keys})
-    hit = None if ctx.force else ctx.cache.get(key)
-    track_cached = hit is not None
-    if hit is None:
+    # 1) voice track: PCM concat (stream copy)
+    vkey = canonical_key(
+        {
+            "stage": "voice_track",
+            "v": AUDIO_VERSION,
+            "parts": [s.scene_audio_key for s in ctx.scenes],
+        }
+    )
+
+    def concat_args(tmp: Path) -> list[str]:
         rel = [ctx.cache.relpath(s.scene_audio) for s in ctx.scenes if s.scene_audio]
-        list_file = ctx.cache.root / f"concat-{key}.txt"
+        list_file = ctx.cache.root / f"concat-{vkey}.txt"
         atomic_write_text(list_file, concat_list_text(rel))
-        tmp = ctx.cache.tmp_path(key, ".wav")
-        try:
-            total_s = ctx.total_frames() / ctx.fps
-            await ctx.ffmpeg.run(
-                build_concat_copy(ctx.ffmpeg.ffmpeg, list_file, tmp),
-                timeout_s=ctx.ffmpeg.timeout_for(total_s / 10),
+        return build_concat_copy(ctx.ffmpeg.ffmpeg, list_file, tmp)
+
+    try:
+        voice_track = await _cached(ctx, vkey, ".wav", concat_args, long_timeout)
+    finally:
+        (ctx.cache.root / f"concat-{vkey}.txt").unlink(missing_ok=True)
+    ctx.reporter.advance("audio")
+
+    # 2) music bed, ducked under the voice
+    music = ctx.project.project.music
+    mix, mkey = voice_track, vkey
+    if music is not None:
+        mpath = ctx.project.resolve(music.file)
+        await ctx.ffmpeg.validate_audio(mpath, max_s=4 * 3600)
+        duck = DuckParams(
+            acfg.duck_threshold, acfg.duck_ratio, acfg.duck_attack_ms, acfg.duck_release_ms
+        )
+        mkey = canonical_key(
+            {
+                "stage": "music_mix",
+                "v": AUDIO_VERSION,
+                "voice": vkey,
+                "music": file_sha256(mpath),
+                "db": music.volume_db,
+                "duck": repr(duck),
+                "fades": [acfg.music_fade_in_s, acfg.music_fade_out_s],
+            }
+        )
+
+        def mix_args(tmp: Path) -> list[str]:
+            return build_music_mix(
+                ctx.ffmpeg.ffmpeg,
+                voice_track,
+                mpath,
+                tmp,
+                total_samples=total_samples,
+                sample_rate=sr,
+                music_db=music.volume_db,
+                duck=duck,
+                fade_in_s=acfg.music_fade_in_s,
+                fade_out_s=acfg.music_fade_out_s,
             )
-            hit = ctx.cache.commit(key, tmp, ".wav", {"scenes": len(keys)})
+
+        mix = await _cached(ctx, mkey, ".wav", mix_args, long_timeout)
+    ctx.reporter.advance("audio")
+
+    # 3) two-pass loudness normalization (I / TP / LRA from config)
+    target = LoudnessTarget(acfg.loudness_i, acfg.true_peak, acfg.lra)
+    lkey = canonical_key(
+        {"stage": "loudnorm", "v": AUDIO_VERSION, "mix": mkey, "target": repr(target), "sr": sr}
+    )
+    hit = None if ctx.force else ctx.cache.get(lkey)
+    if hit is None:
+        _, err = await ctx.ffmpeg.run_capture(
+            build_loudnorm_measure(ctx.ffmpeg.ffmpeg, mix, target), timeout_s=long_timeout
+        )
+        m = parse_loudnorm(err.decode("utf-8", "replace"))
+        ctx.log.info("loudnorm.measured", **{k: round(v, 2) for k, v in m.items()})
+        tmp = ctx.cache.tmp_path(lkey, ".wav")
+        try:
+            if not math.isfinite(m["input_i"]) or m["input_i"] < SILENCE_LUFS:
+                ctx.log.warning("loudnorm.skipped_silence", input_i=m["input_i"])
+                tmp.write_bytes(mix.read_bytes())
+            else:
+                await ctx.ffmpeg.run(
+                    build_loudnorm_apply(ctx.ffmpeg.ffmpeg, mix, tmp, target, m, sr),
+                    timeout_s=long_timeout,
+                )
+            hit = ctx.cache.commit(
+                lkey, tmp, ".wav", {k: v if math.isfinite(v) else None for k, v in m.items()}
+            )
         except BaseException:
             ctx.cache.discard(tmp)
             raise
-        finally:
-            list_file.unlink(missing_ok=True)
-    ctx.artifacts["audio"], ctx.keys["audio"] = hit.path, key
-    ctx.reporter.advance("audio", cached=track_cached)
+    ctx.artifacts["audio"], ctx.keys["audio"] = hit.path, lkey
+    ctx.reporter.advance("audio")

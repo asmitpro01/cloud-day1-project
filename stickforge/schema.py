@@ -64,6 +64,7 @@ class Style(_Strict):
     line_style: str = "thick clean black outlines, flat colors"
     background: str = "plain off-white background"
     prompt_prefix: str = ""
+    font: str = ""  # optional .ttf/.otf inside the project for on-screen text + captions
 
     @field_validator("palette")
     @classmethod
@@ -217,6 +218,8 @@ def _check_paths(root: Path, project: Project, scenes: list[Scene]) -> list[str]
         refs += [(f"project.yaml: cast '{c.name}' reference_images", r) for r in c.reference_images]
     if project.music:
         refs.append(("project.yaml: music.file", project.music.file))
+    if project.style.font:
+        refs.append(("project.yaml: style.font", project.style.font))
     refs += [(f"scene {s.id}: sfx", s.sfx) for s in scenes if s.sfx]
     problems = []
     for label, rel in refs:

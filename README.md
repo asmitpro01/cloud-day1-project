@@ -6,9 +6,10 @@ scene, camera moves, on-screen text, music, captions. Rendering is FFmpeg only.
 
 Runs on Linux, macOS and Windows 10/11 (no WSL needed).
 
-> Status: **M2** — real providers (Kokoro local TTS, Gemini + fal images, ElevenLabs,
-> litellm), cache, parallel stages, per-provider rate limits, retries and fallback
-> chains. Camera moves, music, loudness and captions arrive in M3.
+> Status: **M3** — real providers with retries/rate limits/fallback (M2), plus eased
+> camera moves, on-screen text, crossfades, SFX, music ducking, two-pass loudness
+> normalization (-14 LUFS / -1 dBTP) and captions (.srt + optional burn-in).
+> QA loop, `--only-scenes`, report.json and the cost ledger arrive in M4.
 
 ## Install
 
@@ -65,6 +66,30 @@ Unready providers (no key, extra not installed, model file missing) are skipped;
 back is regenerated with the preferred provider on the next run once it works again.
 Voices: set `voice.id` (Kokoro: e.g. `af_heart`, `am_michael`, British `bf_emma`,
 `bm_george`) and `voice.by_adapter: {elevenlabs: <voice id>}` for other providers.
+
+## What a scene can use
+
+| Field | Values / effect |
+|---|---|
+| `camera` | `static`, `slow_zoom_in`, `slow_zoom_out`, `pan_left`, `pan_right` — eased (cosine) moves |
+| `on_screen_text` | Title card near the top, fades in; rendered with Pillow (any Unicode) |
+| `sfx` | Audio file in the project, played at the scene start (`audio.sfx_volume_db`) |
+
+Project-level (`project.yaml` → `output` / `music` / `style`):
+`transition: cut | crossfade` (+ `crossfade_s`), `burn_in_captions: true|false`,
+`music: {file, volume_db}` (looped, ducked under the voice, faded in/out),
+`style.font` (optional `.ttf`/`.otf` inside the project; default is Pillow's bundled font).
+
+Outputs in `<project>/renders/<mode>/`: the MP4 and an `.srt` caption sidecar.
+
+### Captions timing
+
+Caption words come from the first aligner that works for a scene:
+`tts_timestamps` (exact, free — when the TTS returns timings, e.g. ElevenLabs) →
+`whisperx` (if installed) → `scene_level` (estimate; sentence-sized cues stay readable).
+WhisperX is **not** in the lockfile: every current release pins torch/transformers
+versions with published security advisories. To use it anyway on your own machine:
+`uv pip install whisperx` (pulls PyTorch, >1 GB).
 
 ## Configuration
 

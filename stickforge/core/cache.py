@@ -1,6 +1,6 @@
 """Content-addressed cache with crash-safe commits.
 
-Layout: ``<root>/<key[:2]>/<key><suffix>`` plus ``<key>.json`` sidecar. An entry exists
+Layout: ``<root>/<key[:2]>/<key><suffix>`` plus a ``<key>.meta.json`` sidecar. An entry exists
 only once its sidecar is written (after the media file is atomically moved into place),
 so a crash mid-write leaves at most an orphaned temp file, never a half-valid entry.
 """
@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any
 
 KEY_VERSION = 1
+SIDECAR_SUFFIX = ".meta.json"
 
 
 def canonical_key(parts: dict[str, Any]) -> str:
@@ -81,7 +82,7 @@ class Cache:
         return self._dir(key) / f"{key}{suffix}"
 
     def get(self, key: str) -> CacheEntry | None:
-        sidecar = self._dir(key) / f"{key}.json"
+        sidecar = self._sidecar(key)
         try:
             doc = json.loads(sidecar.read_text(encoding="utf-8"))
         except (FileNotFoundError, json.JSONDecodeError):
@@ -91,6 +92,9 @@ class Cache:
             return None
         return CacheEntry(key=key, path=media, meta=doc.get("meta", {}))
 
+    def _sidecar(self, key: str) -> Path:
+        return self._dir(key) / f"{key}{SIDECAR_SUFFIX}"
+
     def tmp_path(self, key: str, suffix: str) -> Path:
         d = self._dir(key)
         d.mkdir(parents=True, exist_ok=True)
@@ -98,10 +102,12 @@ class Cache:
         return d / f"tmp-{key[:12]}-{uuid.uuid4().hex[:8]}{suffix}"
 
     def commit(self, key: str, tmp: Path, suffix: str, meta: dict[str, Any]) -> CacheEntry:
+        if suffix == SIDECAR_SUFFIX:
+            raise ValueError("media suffix collides with the cache sidecar")
         final = self.media_path(key, suffix)
         tmp.replace(final)
         doc = {"file": final.name, "meta": meta}
-        atomic_write_text(self._dir(key) / f"{key}.json", json.dumps(doc, indent=1, default=str))
+        atomic_write_text(self._sidecar(key), json.dumps(doc, indent=1, default=str))
         return CacheEntry(key=key, path=final, meta=meta)
 
     @staticmethod

@@ -9,8 +9,6 @@ from stickforge.core.ffmpeg import (
     EncoderParams,
     build_concat_copy,
     build_mux,
-    build_scene_audio,
-    build_static_segment,
     concat_list_text,
 )
 from stickforge.pipeline.audio_stage import scene_samples
@@ -39,6 +37,15 @@ def test_cache_commit_and_crash_safety(tmp_path: Path):
         c.get("../../etc")
 
 
+def test_cache_json_media_does_not_collide_with_sidecar(tmp_path: Path):
+    c = Cache(tmp_path / "c")
+    k = canonical_key({"t": "json"})
+    tmp = c.tmp_path(k, ".json")
+    tmp.write_text('[{"word": "hi"}]')
+    e = c.commit(k, tmp, ".json", {"aligner": "x"})
+    assert c.get(k).path.read_text() == '[{"word": "hi"}]' and e.meta == {"aligner": "x"}
+
+
 ENC = EncoderParams(codec="libx264", preset="veryfast", crf=23, fps=30)
 
 
@@ -57,56 +64,6 @@ def test_encoder_args():
         "-g",
         "60",
     ]
-
-
-def test_static_segment_args():
-    args = build_static_segment(
-        "ffmpeg", Path("/c/img.png"), Path("/c/out.mp4"), frames=90, width=1280, height=720, enc=ENC
-    )
-    assert args == [
-        "ffmpeg",
-        "-hide_banner",
-        "-nostdin",
-        "-y",
-        "-loglevel",
-        "error",
-        "-loop",
-        "1",
-        "-framerate",
-        "30",
-        "-i",
-        str(Path("/c/img.png")),
-        "-vf",
-        "scale=1280:720:force_original_aspect_ratio=increase:flags=lanczos,"
-        "crop=1280:720,setsar=1,format=yuv420p",
-        "-frames:v",
-        "90",
-        "-r",
-        "30",
-        *ENC.to_args(),
-        "-video_track_timescale",
-        "15360",
-        "-an",
-        str(Path("/c/out.mp4")),
-    ]
-
-
-def test_scene_audio_args():
-    args = build_scene_audio(
-        "ffmpeg",
-        Path("v.wav"),
-        Path("o.wav"),
-        voice_s=2.5,
-        samples=144000,
-        sample_rate=48000,
-        fade_ms=8,
-    )
-    assert args[args.index("-af") + 1] == (
-        "aresample=48000,aformat=sample_fmts=s16:channel_layouts=stereo,"
-        "afade=t=in:st=0:d=0.008,afade=t=out:st=2.492:d=0.008,"
-        "apad=whole_len=144000,atrim=end_sample=144000"
-    )
-    assert args[-7:] == ["-c:a", "pcm_s16le", "-ar", "48000", "-ac", "2", "o.wav"]
 
 
 def test_concat_and_mux_args():

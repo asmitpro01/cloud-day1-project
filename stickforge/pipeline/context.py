@@ -50,6 +50,12 @@ class SceneState:
     attempts: dict[str, int] = field(default_factory=dict)  # stage -> calls made this run
     cost_usd: float = 0.0  # spent this run (cache hits cost nothing)
     errors: list[str] = field(default_factory=list)  # provider failures that were survived
+    cues: list[Any] = field(default_factory=list)  # captions_stage.Cue, scene-local times
+    caption_pngs: list[tuple[Path, float, float, str]] = field(default_factory=list)
+    title_png: Path | None = None
+    title_key: str | None = None
+    end_frame: Path | None = None  # camera view at the end of this scene (crossfade source)
+    end_frame_key: str | None = None
 
     def duration_s(self, fps: int) -> float:
         return self.frames / fps

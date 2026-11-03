@@ -9,12 +9,13 @@ import pytest
 SAMPLE = Path(__file__).resolve().parent.parent / "examples" / "sample_project"
 
 
-# Deterministic zero-key, zero-model config (silent TTS + placeholder images).
+# Deterministic zero-key, zero-model config: speech-like tone TTS (so loudness is
+# measurable), placeholder images, scene-level captions.
 OFFLINE_CONFIG = """
 retry: {max_attempts: 2, base_delay_s: 0.0, max_delay_s: 0.0}
 modes:
-  draft: {chains: {tts: [silent], image: [placeholder], vision_qa: []}}
-  final: {chains: {tts: [silent], image: [placeholder], vision_qa: []}}
+  draft: {chains: {tts: [tone], image: [placeholder], vision_qa: [], align: [scene_level]}}
+  final: {chains: {tts: [tone], image: [placeholder], vision_qa: [], align: [scene_level]}}
 """
 
 
