@@ -10,6 +10,7 @@ from typing import Any, Protocol
 from stickforge.config import EngineConfig, ModeConfig
 from stickforge.core.cache import Cache
 from stickforge.core.ffmpeg import EncoderParams, FFmpeg
+from stickforge.core.retry import RetryPolicy
 from stickforge.providers.base import AudioResult, ImageResult
 from stickforge.providers.registry import Registry
 from stickforge.schema import LoadedProject, Scene
@@ -45,6 +46,10 @@ class SceneState:
     scene_audio: Path | None = None
     scene_audio_key: str | None = None
     cache_hits: dict[str, bool] = field(default_factory=dict)
+    providers: dict[str, str] = field(default_factory=dict)  # stage -> provider used
+    attempts: dict[str, int] = field(default_factory=dict)  # stage -> calls made this run
+    cost_usd: float = 0.0  # spent this run (cache hits cost nothing)
+    errors: list[str] = field(default_factory=list)  # provider failures that were survived
 
     def duration_s(self, fps: int) -> float:
         return self.frames / fps
@@ -80,6 +85,7 @@ class RunContext:
     reporter: Reporter
     log: Any
     force: bool = False
+    retry: RetryPolicy = field(default_factory=RetryPolicy)
     scenes: list[SceneState] = field(default_factory=list)
     artifacts: dict[str, Path] = field(default_factory=dict)
     keys: dict[str, str] = field(default_factory=dict)

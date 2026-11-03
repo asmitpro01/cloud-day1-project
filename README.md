@@ -6,9 +6,9 @@ scene, camera moves, on-screen text, music, captions. Rendering is FFmpeg only.
 
 Runs on Linux, macOS and Windows 10/11 (no WSL needed).
 
-> Status: **M1 skeleton** — schema, config, registry, offline adapters (silent TTS +
-> placeholder images), static-camera render, frame-exact audio, cache. Real providers,
-> camera moves, music, loudness and captions arrive in M2–M3.
+> Status: **M2** — real providers (Kokoro local TTS, Gemini + fal images, ElevenLabs,
+> litellm), cache, parallel stages, per-provider rate limits, retries and fallback
+> chains. Camera moves, music, loudness and captions arrive in M3.
 
 ## Install
 
@@ -20,11 +20,15 @@ Runs on Linux, macOS and Windows 10/11 (no WSL needed).
    - **macOS:** `brew install ffmpeg`
    - **Ubuntu/Debian:** `sudo apt install ffmpeg`
    - Or point `render.ffmpeg_path` / `render.ffprobe_path` in `config.yaml` at the binaries.
-3. **stickforge:**
+3. **stickforge** (with the local voice and LLM extras):
    ```
-   uv sync
+   uv sync --extra kokoro --extra llm
+   uv run stickforge models pull        # Kokoro model files (~360 MB), sha256-verified
    uv run stickforge doctor
    ```
+4. **API keys** (optional): copy `.env.example` to `.env` and fill in what you use,
+   e.g. `GEMINI_API_KEY` from Google AI Studio. Without keys, images fall back to
+   offline placeholders and the run prints a warning.
 
 Hardware encoders (NVENC / VideoToolbox / QuickSync) are used automatically when a test
 encode succeeds; otherwise libx264.
@@ -47,6 +51,20 @@ Output: `examples/sample_project/renders/draft/sample.mp4`. Rerunning reuses the
 | `stickforge validate <project>` | Schema validation + style lint warnings |
 | `stickforge render <project> --draft\|--final [--force]` | Render |
 | `stickforge report <project>` | Pretty-print report.json (M4) |
+
+## Providers
+
+| Capability | Default chain (draft) | Default chain (final) |
+|---|---|---|
+| Voice | Kokoro (local, fp32) → silent stub | same |
+| Images | Gemini `gemini-3.1-flash-lite-image` → fal FLUX schnell → placeholder | Gemini `gemini-3.1-flash-image` (2K) → flash-lite → fal → placeholder |
+| Vision QA | Gemini via litellm | same |
+
+Unready providers (no key, extra not installed, model file missing) are skipped;
+`stickforge providers` shows why. Image fallback is per scene, and a scene that fell
+back is regenerated with the preferred provider on the next run once it works again.
+Voices: set `voice.id` (Kokoro: e.g. `af_heart`, `am_michael`, British `bf_emma`,
+`bm_george`) and `voice.by_adapter: {elevenlabs: <voice id>}` for other providers.
 
 ## Configuration
 

@@ -1,19 +1,108 @@
 # stickforge engine defaults. A config.yaml in the working directory (or --config /
 # STICKFORGE_CONFIG) is deep-merged over this file. Secrets never go here: reference
 # them by environment variable name via `api_key_env`.
+#
+# Model ids / endpoints were checked on 2026-10-23 against the providers' official SDK
+# sources and cookbooks; prices come from litellm's cost map (v1.106.2) — re-check
+# them on the providers' pricing pages before relying on cost reports.
 
 seed: 1234
 cache_dir: .cache        # relative to the project folder
 output_dir: renders      # relative to the project folder
+models_dir: ""           # "" = ~/.cache/stickforge/models (Windows: %LOCALAPPDATA%\stickforge\models)
+
+retry:
+  max_attempts: 4        # 429 / 5xx / timeouts only; auth + validation errors never retry
+  base_delay_s: 1.0
+  max_delay_s: 30.0
+
+# Local model files, pinned by sha256 (`stickforge models pull <key>`).
+models:
+  kokoro-v1.0-int8:
+    url: https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.1/kokoro-v1.0.int8.onnx
+    sha256: ae315a79b623f244700e4afb9246c46a26066782e049ba174bf3ba433970ee9c
+    file: kokoro-v1.1/kokoro-v1.0.int8.onnx
+    max_bytes: 150000000
+    license_note: Kokoro-82M, Apache-2.0
+  kokoro-v1.0-fp32:
+    url: https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.1/kokoro-v1.0.onnx
+    sha256: beb0d1848dee9a49da392cc3df26958d46cfa35d321edf434f52949153f0df3a
+    file: kokoro-v1.1/kokoro-v1.0.onnx
+    max_bytes: 400000000
+    license_note: Kokoro-82M, Apache-2.0
+  kokoro-voices-v1.0:
+    url: https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.1/voices-v1.0.bin
+    sha256: bca610b8308e8d99f32e6fe4197e7ec01679264efed0cac9140fe9c29f1fbf7d
+    file: kokoro-v1.1/voices-v1.0.bin
+    max_bytes: 50000000
+    license_note: Kokoro-82M voices, Apache-2.0
 
 providers:
+  # --- TTS -----------------------------------------------------------------
+  kokoro_int8:                       # smaller download / RAM; slower on many x86 CPUs
+    adapter: kokoro
+    settings: {model: kokoro-v1.0-int8, voices: kokoro-voices-v1.0}
+  kokoro:
+    adapter: kokoro
+    settings: {model: kokoro-v1.0-fp32, voices: kokoro-voices-v1.0}
+  elevenlabs:
+    adapter: elevenlabs
+    model: eleven_multilingual_v2
+    api_key_env: ELEVENLABS_API_KEY
+    max_concurrency: 2
+    cost: {per_1k_chars_usd: 0.0}   # plan-dependent: set from your ElevenLabs plan
   silent:
     adapter: silent
+    settings: {words_per_minute: 150}
+
+  # --- Images --------------------------------------------------------------
+  gemini_lite:                       # "Nano-Banana 2 Lite": fastest/cheapest, <= 3 refs
+    adapter: gemini
+    model: gemini-3.1-flash-lite-image
+    api_key_env: GEMINI_API_KEY
+    max_concurrency: 4
+    requests_per_minute: 10          # raise to match your AI Studio tier
+    timeout_s: 120
+    cost: {per_image_usd: 0.0336}
+    settings: {image_size: 1K, max_refs: 3}
+  gemini_flash:                      # "Nano-Banana 2": higher quality, 2K, <= 14 refs
+    adapter: gemini
+    model: gemini-3.1-flash-image
+    api_key_env: GEMINI_API_KEY
+    max_concurrency: 4
+    requests_per_minute: 10
+    timeout_s: 180
+    cost: {per_image_usd: 0.045}     # 1K list price; 2K costs more — check pricing page
+    settings: {image_size: 2K, max_refs: 6}
+  fal_schnell:                       # FLUX schnell on fal: cheap fallback, no refs
+    adapter: fal
+    model: fal-ai/flux/schnell
+    api_key_env: FAL_KEY
+    max_concurrency: 4
+    timeout_s: 120
+    cost: {per_image_usd: 0.003}
+    license_note: FLUX.1 [schnell], Apache-2.0
     settings:
-      words_per_minute: 150   # duration estimate for the silent stub
+      # Model input fields not verifiable from this environment (fal.ai blocked);
+      # adjust here if fal's model page differs.
+      input: {image_size: landscape_16_9, output_format: png, enable_safety_checker: true}
   placeholder:
     adapter: placeholder
 
+  # --- LLM / QA --------------------------------------------------------------
+  gemini_qa:
+    adapter: litellm_vision_qa
+    model: gemini/gemini-3.8-flash
+    api_key_env: GEMINI_API_KEY
+    timeout_s: 60
+  gemini_llm:
+    adapter: litellm
+    model: gemini/gemini-3.8-flash
+    api_key_env: GEMINI_API_KEY
+    timeout_s: 60
+
+# Chains are fallback orders. Providers that are not ready (missing key, dependency or
+# model file) are skipped; a stub (silent / placeholder) being used is reported loudly.
 modes:
   draft:
     width: 1280
@@ -23,8 +112,9 @@ modes:
     crf: 23
     qa: false
     chains:
-      tts: [silent]
-      image: [placeholder]
+      tts: [kokoro, silent]   # fp32: on x86 CPUs it measured ~4x faster than int8
+      image: [gemini_lite, fal_schnell, placeholder]
+      vision_qa: [gemini_qa]
   final:
     width: 1920
     height: 1080
@@ -33,8 +123,9 @@ modes:
     crf: 18
     qa: true
     chains:
-      tts: [silent]
-      image: [placeholder]
+      tts: [kokoro, silent]
+      image: [gemini_flash, gemini_lite, fal_schnell, placeholder]
+      vision_qa: [gemini_qa]
 
 render:
   encoder: auto          # auto | libx264 | h264_nvenc | h264_videotoolbox | h264_qsv

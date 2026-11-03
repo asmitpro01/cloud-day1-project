@@ -9,10 +9,20 @@ import pytest
 SAMPLE = Path(__file__).resolve().parent.parent / "examples" / "sample_project"
 
 
+# Deterministic zero-key, zero-model config (silent TTS + placeholder images).
+OFFLINE_CONFIG = """
+retry: {max_attempts: 2, base_delay_s: 0.0, max_delay_s: 0.0}
+modes:
+  draft: {chains: {tts: [silent], image: [placeholder], vision_qa: []}}
+  final: {chains: {tts: [silent], image: [placeholder], vision_qa: []}}
+"""
+
+
 @pytest.fixture
 def sample_project(tmp_path: Path) -> Path:
     dst = tmp_path / "proj"
     shutil.copytree(SAMPLE, dst, ignore=shutil.ignore_patterns(".cache", "renders"))
+    (dst / "config.yaml").write_text(OFFLINE_CONFIG, encoding="utf-8")
     return dst
 
 

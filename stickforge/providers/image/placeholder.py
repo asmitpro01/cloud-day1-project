@@ -62,7 +62,7 @@ def render_placeholder(prompt: str, seed: int, width: int, height: int, out: Pat
 class PlaceholderImage(Adapter):
     adapter_name: ClassVar[str] = "placeholder"
     kind: ClassVar[Kind] = Kind.IMAGE
-    capabilities: ClassVar[frozenset[str]] = frozenset({"seed"})
+    capabilities: ClassVar[frozenset[str]] = frozenset({"seed", "stub"})
     default_max_concurrency: ClassVar[int] = 4
     license_note: ClassVar[str] = "generated locally by stickforge (MIT)"
 

@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, Protocol, runtime_checkable
 from pydantic import BaseModel, ConfigDict, Field
 
 if TYPE_CHECKING:
-    from stickforge.config import ProviderConfig
+    from stickforge.config import EngineConfig, ProviderConfig
     from stickforge.schema import Scene, Style
 
 
@@ -203,10 +203,39 @@ class Adapter:
                 raise RuntimeError(f"duplicate adapter name {cls.adapter_name!r}")
             Adapter._registry[cls.adapter_name] = cls
 
-    def __init__(self, name: str, config: ProviderConfig, api_key: str | None = None) -> None:
+    def __init__(
+        self,
+        name: str,
+        config: ProviderConfig,
+        api_key: str | None = None,
+        *,
+        engine: EngineConfig | None = None,
+    ) -> None:
         self.name = name
         self.config = config
+        self.engine = engine
         self._api_key = api_key
+
+    @classmethod
+    def readiness_problem(cls, config: ProviderConfig, engine: EngineConfig) -> str | None:
+        """Adapter-specific readiness check (e.g. local model files). None = ready."""
+        return None
+
+    def cache_identity(self) -> dict[str, Any]:
+        """Everything about this adapter that changes its output. Part of cache keys."""
+        return {
+            "adapter": self.adapter_name,
+            "model": self.config.model,
+            "endpoint": self.config.endpoint,
+            "settings": self.config.settings,
+        }
+
+    def has(self, capability: str) -> bool:
+        """Capability check; adapters whose capabilities depend on config override this."""
+        return capability in self.capabilities
+
+    def cost_rate(self, key: str) -> float:
+        return float(self.config.cost.get(key, 0.0))
 
     @property
     def model(self) -> str | None:

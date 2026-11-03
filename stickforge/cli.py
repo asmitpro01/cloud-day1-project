@@ -18,7 +18,7 @@ from rich.table import Table
 
 from stickforge.config import EngineConfig, load_config
 from stickforge.lint import lint_scenes
-from stickforge.providers.registry import Registry, RegistryError
+from stickforge.providers.registry import Registry
 from stickforge.schema import ProjectError, load_project
 
 app = typer.Typer(add_completion=False, no_args_is_help=True, help=__doc__)
@@ -81,6 +81,49 @@ def doctor(config: ConfigOpt = None) -> None:
     console.print(t)
     if not ok:
         raise typer.Exit(1)
+
+
+models_app = typer.Typer(no_args_is_help=True, help="Local model files (pinned by sha256).")
+app.add_typer(models_app, name="models")
+
+
+@models_app.command("list")
+def models_list(config: ConfigOpt = None) -> None:
+    """Show configured model files and whether they are installed."""
+    from stickforge.models import is_installed
+
+    cfg = _config(config)
+    t = Table(title=f"models ({cfg.models_path()})")
+    for col in ("key", "file", "installed", "license"):
+        t.add_column(col)
+    for key, mf in cfg.models.items():
+        ok = is_installed(cfg, key)
+        t.add_row(
+            key, mf.file, "[green]yes[/green]" if ok else "[yellow]no[/yellow]", mf.license_note
+        )
+    console.print(t)
+
+
+@models_app.command("pull")
+def models_pull(
+    keys: Annotated[list[str] | None, typer.Argument(help="Model keys (default: all)")] = None,
+    config: ConfigOpt = None,
+) -> None:
+    """Download model files over HTTPS and verify their sha256."""
+    from stickforge.models import pull
+
+    cfg = _config(config)
+    for key in keys or list(cfg.models):
+        if key not in cfg.models:
+            console.print(f"[red]unknown model {key!r}[/red]")
+            raise typer.Exit(2)
+        with console.status(f"pulling {key} …"):
+            try:
+                path = asyncio.run(pull(cfg, key))
+            except Exception as e:
+                console.print(f"[red]{key}: {e}[/red]", markup=False)
+                raise typer.Exit(1) from None
+        console.print(f"[green]ok[/green] {key} -> {path}")
 
 
 @app.command()
@@ -193,8 +236,14 @@ def render(
             for p in e.problems:
                 console.print(f"  • {p}", markup=False)
             raise typer.Exit(1) from None
-        except (RegistryError, RuntimeError) as e:
-            console.print(f"[red]render failed:[/red] {e}", markup=False)
+        except Exception as e:  # one clear, redacted line; full trace goes to the run log
+            from stickforge.core.security import REDACTOR
+
+            console.print(
+                f"render failed: {REDACTOR.text(f'{type(e).__name__}: {e}')}",
+                style="red",
+                markup=False,
+            )
             raise typer.Exit(1) from None
     for w in res.lint:
         console.print(f"[yellow]warning[/yellow] {w}", highlight=False)
