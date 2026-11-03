@@ -1,7 +1,7 @@
 # stickforge
 
-Local, provider-agnostic engine that turns a scene plan (`scenes.json` + `project.yaml`)
-into a finished, YouTube-ready 16:9 stickman explainer: narration, one image per scene
+Local, provider-agnostic engine that turns a narration script (or a hand-written scene
+plan: `scenes.json` + `project.yaml`) into a finished, YouTube-ready 16:9 stickman explainer: narration, one image per scene
 with a consistent cast, eased camera moves, on-screen text, crossfades, music ducked
 under the voice, loudness-normalized audio and captions. Rendering is FFmpeg only.
 
@@ -39,7 +39,17 @@ uv run stickforge render examples/sample_project --draft     # fast preview, 720
 uv run stickforge render examples/sample_project --final     # 1080p, best models, QA
 uv run stickforge report examples/sample_project
 ```
-Outputs land in `<project>/renders/<mode>/`: the MP4, an `.srt`, `report.json`,
+From a plain-text script instead of a hand-written plan:
+```
+uv run stickforge new my_video --script script.txt          # writes project.yaml + scenes.json
+uv run stickforge render my_video --draft
+```
+`new` plans scenes with the LLM in `planner.chain` (Gemini by default) and falls back to
+a rule-based splitter when no LLM is ready (`--no-llm` forces it), so it works offline.
+The LLM plan is rejected, and the rules used instead, if it drops more than 15% of the
+script's words or uses an unknown shot or camera.
+
+Outputs land in `<project>/renders/<mode>/`: the MP4, `.srt` and `.vtt` captions, `report.json`,
 `costs.jsonl` and a JSON-lines run log.
 
 ## Commands
@@ -49,9 +59,40 @@ Outputs land in `<project>/renders/<mode>/`: the MP4, an `.srt`, `report.json`,
 | `stickforge doctor` | Environment, encoders, provider readiness (never prints secrets) |
 | `stickforge providers` | Adapters, capabilities, configured status, mode chains |
 | `stickforge models list` / `pull [keys]` | Local model files, pinned by sha256 |
+| `stickforge new <project> --script <file> [--title] [--no-llm] [--overwrite]` | Script to scene plan |
+| `stickforge mcp [--root <workspace>]` | MCP server on stdio (see below) |
 | `stickforge validate <project>` | Schema validation (errors name the scene id) + style lint |
 | `stickforge render <project> --draft\|--final [--only-scenes 4,12] [--force] [--qa/--no-qa]` | Render |
 | `stickforge report <project> [--mode final] [--json]` | Per-scene status, cost, QA issues |
+
+## MCP server
+
+`stickforge mcp` exposes the engine to MCP clients (Claude Desktop, Claude Code, others)
+over stdio. Install the extra with `uv sync --extra mcp` (tested with the `mcp` SDK 2.3).
+Projects live as folders directly inside `--root` (default `./stickforge-projects`) and
+are addressed by name only, so a client cannot touch files outside that folder.
+
+| Tool | What it does |
+|---|---|
+| `script_to_video(name, script, title?, mode?)` | Plan a project from a script and start rendering it |
+| `create_project(name, script, title?, use_llm?, overwrite?)` | Plan only |
+| `get_project(name)` / `update_scene(name, scene_id, …)` | Inspect and edit scenes (invalid edits are rolled back) |
+| `render(name, mode?, only_scenes?, force?)` | Start a render job; returns a job id at once |
+| `job_status(job_id, wait_s?)` | Per-stage progress and the result paths; waits up to 60 s |
+| `get_report(name, mode?)` / `list_projects()` / `providers()` | Reports, projects, provider readiness |
+
+Renders run as background jobs, one at a time, so long videos never hit a client's
+tool-call timeout. Claude Code:
+```
+claude mcp add stickforge -- uv --directory /path/to/stickforge run stickforge mcp --root /path/to/videos
+```
+Claude Desktop (`claude_desktop_config.json`):
+```json
+{"mcpServers": {"stickforge": {"command": "uv", "args": ["--directory", "/path/to/stickforge",
+  "run", "stickforge", "mcp", "--root", "/path/to/videos"]}}}
+```
+API keys come from the server's environment or the `.env` in its working directory, as
+for the CLI.
 
 ## Project format
 

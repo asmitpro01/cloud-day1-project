@@ -83,6 +83,16 @@ def to_srt(cues: list[Cue]) -> str:
     )
 
 
+def _vtt_ts(t: float) -> str:
+    return _ts(t).replace(",", ".")
+
+
+def to_vtt(cues: list[Cue]) -> str:
+    return "WEBVTT\n\n" + "".join(
+        f"{_vtt_ts(c.start_s)} --> {_vtt_ts(c.end_s)}\n{_srt_text(c.text)}\n\n" for c in cues
+    )
+
+
 def global_cues(ctx: RunContext) -> list[Cue]:
     out: list[Cue] = []
     offset = 0
@@ -161,9 +171,12 @@ async def run(ctx: RunContext) -> None:
 
     await run_all(one, ctx.scenes)
 
-    srt = ctx.out_dir / (ctx.project.project.output.filename.removesuffix(".mp4") + ".srt")
-    atomic_write_text(srt, to_srt(global_cues(ctx)))
-    ctx.artifacts["srt"] = srt
+    stem = ctx.project.project.output.filename.removesuffix(".mp4")
+    cues = global_cues(ctx)
+    srt, vtt = ctx.out_dir / f"{stem}.srt", ctx.out_dir / f"{stem}.vtt"
+    atomic_write_text(srt, to_srt(cues))
+    atomic_write_text(vtt, to_vtt(cues))
+    ctx.artifacts["srt"], ctx.artifacts["vtt"] = srt, vtt
 
 
 def caption_style(ctx: RunContext) -> TextStyle:

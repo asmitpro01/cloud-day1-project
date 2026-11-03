@@ -14,6 +14,14 @@ models_dir: ""           # "" = ~/.cache/stickforge/models (Windows: %LOCALAPPDA
 qa:
   max_retries: 2         # failed QA -> regenerate with a new seed, then flag in report.json
 
+# Script -> scene plan (`stickforge new --script`, MCP `create_project`). Without a ready
+# LLM in the chain, a rule-based splitter writes the plan (no keys needed).
+planner:
+  chain: [gemini_llm]
+  max_words_per_scene: 35   # lint warns above 40
+  max_scenes: 300
+  max_script_chars: 60000
+
 retry:
   max_attempts: 4        # 429 / 5xx / timeouts only; auth + validation errors never retry
   base_delay_s: 1.0
