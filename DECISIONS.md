@@ -125,3 +125,47 @@ Short log of choices made where the spec left room. Newest at the bottom.
   4.57 with advisories); the adapter is used automatically if the user installs it.
 - **`tone` test TTS**: a speech-like tone so offline tests can verify loudness and
   ducking; never used by default chains.
+
+## M4 — reliability
+- **Content-addressed downstream keys**: every cache entry records its media sha256 at
+  commit; scene ids and all downstream keys (segment, scene audio, concat, mux,
+  loudnorm) use content hashes, not upstream input keys. Needed for `--only-scenes`
+  with non-deterministic providers (a regenerated image under the same input key
+  would otherwise reuse stale video) — covered by a test with a deliberately random
+  image provider.
+- **`--only-scenes`** bypasses the cache for the listed scenes' own assets; the rest
+  come from cache (generated if missing). With crossfades the *next* scene re-renders
+  too when an image changes, because its first frames fade from that image.
+- **Re-rolls are declarative**: QA retries use seed attempt N (deterministic), and a
+  user wanting a different image sets `seed` on the scene. No hidden state file.
+- **QA**: up to `qa.max_retries` re-rolls; then the attempt with the fewest issues is
+  kept and the scene flagged (never loops). Verdicts are cached by image content and
+  QA input, so reruns replay decisions for free. QA is skipped for stub images and,
+  with a warning, when no QA provider is ready.
+- **Failures**: sibling work finishes (and is cached) before an error propagates, so
+  a rerun after a crash resumes with the most work done. `report.json` is written in
+  a `finally`, including on failure.
+- **Cost ledger**: every provider call that ran (free and failed ones included) goes to
+  `costs.jsonl`; report totals by provider and stage. Cache hits cost nothing.
+- **Report** includes measured output loudness/true peak (ebur128 on the final file)
+  and license notes for providers, local model files, music and font.
+- `openai_compat` image adapter (OpenAI images API shape from the official SDK's
+  types) doubles as the worked example in the README's provider guide.
+- **True peak after AAC**: loudnorm hitting -1.0 dBTP exactly still produced -0.3 dBTP
+  in a 10-minute AAC file (encoder overshoot ~0.7 dB). Normalization now targets
+  `true_peak - codec_headroom_db` (-2 dBTP); the encoded file is measured and, if it
+  still exceeds the ceiling, the audio is trimmed once and a warning recorded.
+  100-scene draft: -14.1 LUFS / -1.8 dBTP.
+- **Incremental re-render cost** for a 10-minute video is dominated by whole-track
+  audio work (two-pass loudnorm ~45 s, AAC mux + loudness check ~35 s on 4 vCPU);
+  per-scene work is seconds. Acceptable for now; a later optimisation could normalize
+  per scene with a fixed gain to make edits O(scene).
+- **fal removed from the default image chains** (user request): it was only a
+  fallback behind Gemini. The adapter and its `fal_schnell` config entry stay so it
+  can be re-enabled by adding it to a chain in `config.yaml`.
+- **Pollinations** (user request) is wired through the existing `openai_compat`
+  adapter — its `/v1/images/generations` is OpenAI-compatible (verified against the
+  project's APIDOCS.md on GitHub; the API host itself is blocked from the build box, so
+  it is tested with mocked HTTP only). Added a `send_seed` setting because Pollinations
+  accepts `seed` and OpenAI does not. First in the draft chain (cheap FLUX schnell),
+  after Gemini in final. 402 (Pollen exhausted) is a permanent error → next provider.

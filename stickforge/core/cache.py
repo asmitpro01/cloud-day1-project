@@ -66,6 +66,7 @@ class CacheEntry:
     key: str
     path: Path
     meta: dict[str, Any]
+    sha256: str  # content hash of the media file — what downstream keys are built from
 
 
 class Cache:
@@ -90,7 +91,8 @@ class Cache:
         media = self._dir(key) / str(doc.get("file", ""))
         if not doc.get("file") or not media.is_file():
             return None
-        return CacheEntry(key=key, path=media, meta=doc.get("meta", {}))
+        digest = doc.get("sha256") or file_sha256(media)
+        return CacheEntry(key=key, path=media, meta=doc.get("meta", {}), sha256=digest)
 
     def _sidecar(self, key: str) -> Path:
         return self._dir(key) / f"{key}{SIDECAR_SUFFIX}"
@@ -104,11 +106,12 @@ class Cache:
     def commit(self, key: str, tmp: Path, suffix: str, meta: dict[str, Any]) -> CacheEntry:
         if suffix == SIDECAR_SUFFIX:
             raise ValueError("media suffix collides with the cache sidecar")
+        digest = file_sha256(tmp)
         final = self.media_path(key, suffix)
         tmp.replace(final)
-        doc = {"file": final.name, "meta": meta}
+        doc = {"file": final.name, "sha256": digest, "meta": meta}
         atomic_write_text(self._sidecar(key), json.dumps(doc, indent=1, default=str))
-        return CacheEntry(key=key, path=final, meta=meta)
+        return CacheEntry(key=key, path=final, meta=meta, sha256=digest)
 
     @staticmethod
     def discard(tmp: Path) -> None:

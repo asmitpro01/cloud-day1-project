@@ -123,7 +123,7 @@ async def test_full_render_offline(full_project: Path, monkeypatch):
 
     integrated, peak = _loudness(res.output)
     assert abs(integrated - cfg.audio.loudness_i) <= 1.0, integrated
-    assert peak <= cfg.audio.true_peak + 0.5, peak  # AAC adds a little overshoot
+    assert peak <= cfg.audio.true_peak + 0.05, peak  # ceiling holds after AAC encoding
 
     srt = (full_project / "renders" / "draft" / "sample.srt").read_text()
     assert srt.startswith("1\n00:00:00,050 --> ") and "Rayleigh" not in srt
@@ -166,6 +166,17 @@ async def test_image_fallback_then_upgrade(sample_project: Path, monkeypatch):
     assert res.output.is_file()
     log = (sample_project / "renders" / "draft" / "stickforge.log.jsonl").read_text()
     assert "image.provider_failed" in log and "AIzaSy-integration" not in log
+
+    # Still down on a rerun: the placeholder now comes from cache, but the report must
+    # still say why the preferred provider was skipped.
+    with respx.mock(assert_all_called=False) as mock:
+        mock.post(GEMINI).mock(return_value=httpx.Response(503, text="overloaded"))
+        await render(sample_project, cfg, mode="draft")
+    report = json.loads((sample_project / "renders" / "draft" / "report.json").read_text())
+    assert all(
+        s["provider_errors"] and s["provider_errors"][0].startswith("gem: HTTP 503")
+        for s in report["scenes"]
+    )
 
     ok = {
         "candidates": [

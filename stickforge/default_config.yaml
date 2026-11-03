@@ -11,6 +11,9 @@ cache_dir: .cache        # relative to the project folder
 output_dir: renders      # relative to the project folder
 models_dir: ""           # "" = ~/.cache/stickforge/models (Windows: %LOCALAPPDATA%\stickforge\models)
 
+qa:
+  max_retries: 2         # failed QA -> regenerate with a new seed, then flag in report.json
+
 retry:
   max_attempts: 4        # 429 / 5xx / timeouts only; auth + validation errors never retry
   base_delay_s: 1.0
@@ -77,7 +80,8 @@ providers:
     timeout_s: 180
     cost: {per_image_usd: 0.045}     # 1K list price; 2K costs more — check pricing page
     settings: {image_size: 2K, max_refs: 6}
-  fal_schnell:                       # FLUX schnell on fal: cheap fallback, no refs
+  fal_schnell:                       # FLUX schnell on fal: cheap, no refs. Not in a chain by
+                                     # default — add it to modes.<m>.chains.image to use it
     adapter: fal
     model: fal-ai/flux/schnell
     api_key_env: FAL_KEY
@@ -89,6 +93,24 @@ providers:
       # Model input fields not verifiable from this environment (fal.ai blocked);
       # adjust here if fal's model page differs.
       input: {image_size: landscape_16_9, output_format: png, enable_safety_checker: true}
+  pollinations:                      # Pollinations (OpenAI-compatible images API), Pollen credits
+    adapter: openai_compat           # API shape verified 2026-10-24 against pollinations APIDOCS.md
+    model: black-forest-labs/flux.1-schnell   # supports seed; others: /image/models
+    endpoint: https://gen.pollinations.ai/v1
+    api_key_env: POLLINATIONS_API_KEY  # an sk_... secret key from enter.pollinations.ai/keys
+    timeout_s: 180
+    requests_per_minute: 20
+    cost: {per_image_usd: 0.0}       # billed in Pollen — see your balance at enter.pollinations.ai
+    license_note: "Pollinations-hosted model; license per model (FLUX.1 [schnell]: Apache-2.0)"
+    settings: {size: 1344x768, send_seed: true, media_hosts: [media.pollinations.ai]}
+  openai_image:                      # any OpenAI-compatible images endpoint; not in a chain
+    adapter: openai_compat           # by default — add it to modes.<m>.chains.image to use
+    model: gpt-image-2               # set to what your provider serves
+    endpoint: https://api.openai.com/v1
+    api_key_env: OPENAI_API_KEY
+    timeout_s: 180
+    cost: {per_image_usd: 0.0}       # fill in from your provider's pricing page
+    settings: {size: 1536x864, extra: {quality: medium, output_format: png}}
   placeholder:
     adapter: placeholder
 
@@ -126,7 +148,7 @@ modes:
     qa: false
     chains:
       tts: [kokoro, silent]   # fp32: on x86 CPUs it measured ~4x faster than int8
-      image: [gemini_lite, fal_schnell, placeholder]
+      image: [pollinations, gemini_lite, placeholder]
       vision_qa: [gemini_qa]
       align: [tts_timestamps, whisperx, scene_level]
   final:
@@ -138,7 +160,7 @@ modes:
     qa: true
     chains:
       tts: [kokoro, silent]
-      image: [gemini_flash, gemini_lite, fal_schnell, placeholder]
+      image: [gemini_flash, gemini_lite, pollinations, placeholder]
       vision_qa: [gemini_qa]
       align: [tts_timestamps, whisperx, scene_level]
 
@@ -161,7 +183,8 @@ audio:
   aac_bitrate: 192k
   fade_ms: 8             # fade in/out on every voice clip (no clicks at joins)
   loudness_i: -14.0      # integrated loudness target, LUFS (YouTube reference)
-  true_peak: -1.0        # dBTP ceiling
+  true_peak: -1.0        # dBTP ceiling of the final file (after AAC)
+  codec_headroom_db: 1.0 # normalize to true_peak - this; AAC overshoots ~0.5-0.8 dB
   lra: 11.0
   sfx_volume_db: -6.0
   duck_threshold: 0.02   # music ducking (sidechain compressor keyed by the voice)

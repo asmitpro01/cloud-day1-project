@@ -42,6 +42,30 @@ def test_error_body_is_redacted():
     assert "AIzaSy" not in str(ei.value)
 
 
+@pytest.mark.parametrize(
+    "body",
+    [
+        '{"error": {"code": 429, "message": "Quota exceeded for metric: '
+        "generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 0, "
+        'model: gemini-3.1-flash-lite-image"}}',
+        '{"error": {"message": "Generate content requests per day limit exceeded"}}',
+        '{"error": {"code": "insufficient_quota", "message": "You exceeded your current quota"}}',
+    ],
+)
+def test_hard_quota_429_is_not_retried(body):
+    resp = httpx.Response(429, text=body, request=httpx.Request("GET", "https://x"))
+    with pytest.raises(PermanentProviderError, match="quota exhausted") as ei:
+        raise_for_status(resp, "p")
+    assert not ei.value.retryable
+
+
+def test_per_minute_429_is_still_retried():
+    body = '{"error": {"message": "Quota exceeded for metric: requests_per_minute, limit: 10"}}'
+    resp = httpx.Response(429, text=body, request=httpx.Request("GET", "https://x"))
+    with pytest.raises(RateLimited):
+        raise_for_status(resp, "p")
+
+
 def test_retry_after_parsed():
     resp = httpx.Response(
         429, headers={"retry-after": "7"}, request=httpx.Request("GET", "https://x")

@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import time
+
 from stickforge.core.cache import canonical_key
 from stickforge.core.retry import with_retry
 from stickforge.pipeline.context import RunContext, SceneState, frames_for
 from stickforge.pipeline.util import run_all
-from stickforge.providers.base import Adapter, AudioResult, Kind, TTSProvider
+from stickforge.providers.base import Adapter, AudioResult, Kind, ProviderError, TTSProvider
 
 
 def tts_key(adapter: Adapter, voice: str, speed: float, text: str) -> str:
@@ -21,10 +23,12 @@ async def run(ctx: RunContext) -> None:
     adapter = ctx.registry.chain(ctx.mode.chains.tts, Kind.TTS)[0]
     assert isinstance(adapter, TTSProvider)
     if adapter.has("stub"):
-        ctx.reporter.note(
-            f"[yellow]WARNING: TTS is the '{adapter.name}' stub — no real voice. "
-            "Run `stickforge doctor` to see why real providers are unavailable."
+        msg = (
+            f"TTS is the '{adapter.name}' stub — no real voice. Run `stickforge doctor` to "
+            "see why real providers are unavailable."
         )
+        ctx.warnings.append(msg)
+        ctx.reporter.note(f"[yellow]WARNING: {msg}")
     voice = ctx.project.project.voice
     voice_id = voice.for_adapter(adapter.adapter_name)
     padding = ctx.project.project.output.scene_padding_s
@@ -33,10 +37,12 @@ async def run(ctx: RunContext) -> None:
 
     async def one(st: SceneState) -> None:
         key = tts_key(adapter, voice_id, voice.speed, st.scene.narration)
-        hit = None if ctx.force else ctx.cache.get(key)
+        hit = None if ctx.forced(st) else ctx.cache.get(key)
         if hit is not None:
             result = AudioResult.model_validate({**hit.meta, "path": hit.path})
+            content_id = hit.sha256
         else:
+            t0 = time.monotonic()
             tmp = ctx.cache.tmp_path(key, ".wav")
 
             async def call() -> AudioResult:
@@ -52,12 +58,34 @@ async def run(ctx: RunContext) -> None:
                 entry = ctx.cache.commit(
                     key, tmp, ".wav", result.model_dump(mode="json", exclude={"path"})
                 )
+            except ProviderError:
+                ctx.cache.discard(tmp)
+                ctx.ledger.record(
+                    "tts",
+                    st.scene.id,
+                    adapter.name,
+                    adapter.model,
+                    0.0,
+                    attempts=ctx.retry.max_attempts,
+                    ok=False,
+                )
+                raise
             except BaseException:
                 ctx.cache.discard(tmp)
                 raise
             result = result.model_copy(update={"path": entry.path})
+            content_id = entry.sha256
             st.attempts["tts"] = attempts
             st.cost_usd += result.cost_usd
+            st.timings["tts"] = round(time.monotonic() - t0, 3)
+            ctx.ledger.record(
+                "tts",
+                st.scene.id,
+                adapter.name,
+                result.model or adapter.model,
+                result.cost_usd,
+                attempts=attempts,
+            )
             ctx.log.info(
                 "tts.done",
                 scene=st.scene.id,
@@ -65,7 +93,7 @@ async def run(ctx: RunContext) -> None:
                 attempts=attempts,
                 duration_s=round(result.duration_s, 3),
             )
-        st.audio, st.audio_key = result, key
+        st.audio, st.audio_id = result, content_id
         st.providers["tts"] = adapter.name
         st.cache_hits["tts"] = hit is not None
         st.frames = frames_for(result.duration_s, padding, ctx.fps)

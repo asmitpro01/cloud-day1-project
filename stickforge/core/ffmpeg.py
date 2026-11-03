@@ -90,8 +90,16 @@ def build_concat_copy(ffmpeg: str, list_file: Path, out: Path) -> list[str]:
 
 
 def build_mux(
-    ffmpeg: str, video: Path, audio: Path, out: Path, *, aac_bitrate: str, sample_rate: int
+    ffmpeg: str,
+    video: Path,
+    audio: Path,
+    out: Path,
+    *,
+    aac_bitrate: str,
+    sample_rate: int,
+    gain_db: float = 0.0,
 ) -> list[str]:
+    trim = ["-af", f"volume={_num(gain_db)}dB"] if gain_db else []
     return [
         ffmpeg,
         *BASE_ARGS,
@@ -103,6 +111,7 @@ def build_mux(
         "0:v:0",
         "-map",
         "1:a:0",
+        *trim,
         "-c:v",
         "copy",
         "-c:a",
@@ -398,6 +407,47 @@ def build_loudnorm_apply(
         "2",
         str(out),
     ]
+
+
+def build_ebur128(ffmpeg: str, media: Path) -> list[str]:
+    """Measure integrated loudness + true peak of a file's audio (EBU R128)."""
+    return [
+        ffmpeg,
+        "-hide_banner",
+        "-nostdin",
+        "-nostats",
+        "-loglevel",
+        "info",
+        "-i",
+        str(media),
+        "-map",
+        "0:a:0",
+        "-af",
+        "ebur128=peak=true",
+        "-f",
+        "null",
+        "-",
+    ]
+
+
+def parse_ebur128(stderr: str) -> dict[str, float]:
+    """Summary values: i (LUFS), lra (LU), tp (dBFS true peak). Missing keys are omitted."""
+    import re
+
+    idx = stderr.rfind("Summary:")
+    if idx < 0:
+        return {}
+    summary = stderr[idx:]
+    out: dict[str, float] = {}
+    for key, pat in (
+        ("i", r"I:\s+(-?[\d.]+|-inf) LUFS"),
+        ("lra", r"LRA:\s+(-?[\d.]+) LU\b"),
+        ("tp", r"Peak:\s+(-?[\d.]+|-inf) dBFS"),
+    ):
+        m = re.search(pat, summary)
+        if m:
+            out[key] = float(m.group(1))
+    return out
 
 
 # ---------------------------------------------------------------------------
