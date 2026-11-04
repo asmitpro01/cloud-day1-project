@@ -1,0 +1,10 @@
+# Keep developer-only files out of the buyer zip (git archive).
+.github/ export-ignore
+tests/ export-ignore
+scripts/ export-ignore
+DECISIONS.md export-ignore
+Makefile export-ignore
+.gitattributes export-ignore
+# Line endings the shells expect.
+*.sh text eol=lf
+*.ps1 text eol=crlf

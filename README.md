@@ -8,7 +8,28 @@ under the voice, loudness-normalized audio and captions. Rendering is FFmpeg onl
 Runs on Linux, macOS and Windows 10/11 (no WSL needed). Output: 1920x1080 (final) or
 1280x720 (draft), 30 fps, H.264 yuv420p + AAC 48 kHz, -14 LUFS / -1 dBTP, faststart.
 
+**New here?** Follow [docs/QUICKSTART.md](docs/QUICKSTART.md): one installer command,
+then your first video in about 15 minutes. Release history: [CHANGELOG.md](CHANGELOG.md).
+
+## What you get
+
+- **Script in, video out**: paste a plain-text script; scenes, shots, camera moves and
+  on-screen text are planned for you (by Gemini, or offline rules with no key).
+- **Free offline voice** (Kokoro) with American and British narrators, or ElevenLabs.
+- **Consistent characters** across scenes, from Gemini, Pollinations, fal or any
+  OpenAI-compatible image model, with automatic fallback and placeholder cards offline.
+- **Ready to upload**: 1080p H.264, loudness-normalized audio, music ducking, SRT/VTT
+  captions, crossfades.
+- **Fast iteration**: 720p drafts, and re-renders that redo only the scenes you changed.
+- **Cost tracking and QA**: per-run cost ledger, vision QA that re-rolls bad images.
+- **Works with Claude**: built-in MCP server for Claude Desktop and Claude Code.
+
 ## Install
+
+**One step:** `powershell -ExecutionPolicy Bypass -File .\install.ps1` on Windows, or
+`sh install.sh` on macOS/Linux, installs everything below and runs `stickforge doctor`.
+
+Manual install:
 
 1. **Python 3.11+ and uv** — <https://docs.astral.sh/uv/getting-started/installation/>
 2. **FFmpeg (with ffprobe and libx264)** on `PATH`:
@@ -228,6 +249,12 @@ confined to the project folder (no `..`, absolute paths or symlink escapes). Dow
 are HTTPS-only with host allowlists, size caps and content checks; images are
 re-encoded, audio is ffprobe-validated. YAML via `safe_load`, no pickle/eval.
 `report.json` lists the license notes of everything used.
+
+## License
+
+Stickforge's code: see [LICENSE](LICENSE). Third-party libraries, models and services
+keep their own terms, summarized in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)
+(note: the offline-voice extra pulls in GPL-3.0 components).
 
 ## Development
 
