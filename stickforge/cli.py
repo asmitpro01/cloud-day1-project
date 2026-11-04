@@ -1,4 +1,4 @@
-"""stickforge command line."""
+"""stickforge: turn a narration script into a finished, YouTube-ready stickman explainer video."""
 
 from __future__ import annotations
 
@@ -16,6 +16,7 @@ from rich.console import Console
 from rich.progress import BarColumn, MofNCompleteColumn, Progress, TaskID, TextColumn
 from rich.table import Table
 
+from stickforge import __version__
 from stickforge.config import EngineConfig, load_config
 from stickforge.lint import lint_scenes
 from stickforge.providers.registry import Registry
@@ -28,6 +29,24 @@ ConfigOpt = Annotated[
     Path | None, typer.Option("--config", "-c", help="Engine config.yaml (merged over defaults)")
 ]
 ProjectArg = Annotated[Path, typer.Argument(help="Project folder", exists=True, file_okay=False)]
+
+
+def _version(value: bool) -> None:
+    if value:
+        console.print(f"stickforge {__version__}", highlight=False)
+        raise typer.Exit()
+
+
+@app.callback()
+def _main(
+    version: Annotated[
+        bool,
+        typer.Option(
+            "--version", "-V", callback=_version, is_eager=True, help="Show the version and exit"
+        ),
+    ] = False,
+) -> None:
+    """Global options."""
 
 
 def _config(path: Path | None) -> EngineConfig:
@@ -55,6 +74,7 @@ def doctor(config: ConfigOpt = None) -> None:
         t.add_row(name, f"[green]ok[/green]  {detail}" if good else f"[red]FAIL[/red] {detail}")
 
     py_ok = sys.version_info >= (3, 11)
+    row("stickforge", True, __version__)
     row("python", py_ok, platform.python_version())
     row("os", True, f"{platform.system()} {platform.release()} ({platform.machine()})")
     ff = make_ffmpeg(cfg)

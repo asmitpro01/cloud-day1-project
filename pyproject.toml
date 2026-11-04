@@ -1,9 +1,22 @@
 [project]
 name = "stickforge"
-version = "0.1.0"
-description = "Local, provider-agnostic engine that turns a scene plan into a YouTube-ready stickman explainer video."
+version = "1.0.0"
+description = "Local, provider-agnostic engine that turns a narration script into a YouTube-ready stickman explainer video."
 readme = "README.md"
 license = { text = "MIT" }
+authors = [{ name = "Asmit Patel" }]
+keywords = ["video", "explainer", "stickman", "text-to-video", "tts", "ffmpeg", "mcp", "youtube"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: Console",
+    "Intended Audience :: End Users/Desktop",
+    "Operating System :: Microsoft :: Windows :: Windows 10",
+    "Operating System :: Microsoft :: Windows :: Windows 11",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Multimedia :: Video",
+]
 requires-python = ">=3.11"
 dependencies = [
     "httpx>=0.27",
@@ -20,6 +33,10 @@ dependencies = [
 kokoro = ["kokoro-onnx>=0.6.1,<0.7", "numpy>=2.0"]   # local TTS (CPU, ~100 MB + model files)
 llm = ["litellm>=1.50"]                              # LLM / vision-QA calls
 mcp = ["mcp>=1.12"]                                # `stickforge mcp`: MCP server over stdio
+
+[project.urls]
+Homepage = "https://github.com/asmitpro01/cloud-day1-project"
+Changelog = "https://github.com/asmitpro01/cloud-day1-project/blob/main/CHANGELOG.md"
 
 [project.scripts]
 stickforge = "stickforge.cli:app"
