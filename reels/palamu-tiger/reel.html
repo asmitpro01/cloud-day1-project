@@ -1,0 +1,338 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<title>Palamu Tiger Reserve reel</title>
+<script src="lib/d3.min.js"></script>
+<style>
+@font-face{font-family:M;font-weight:500;src:url(lib/fonts/montserrat-latin-500-normal.woff2)}
+@font-face{font-family:M;font-weight:600;src:url(lib/fonts/montserrat-latin-600-normal.woff2)}
+@font-face{font-family:M;font-weight:700;src:url(lib/fonts/montserrat-latin-700-normal.woff2)}
+@font-face{font-family:M;font-weight:800;src:url(lib/fonts/montserrat-latin-800-normal.woff2)}
+:root{--gold:#F4B740;--gold2:#FFD27A;--ink:#03101B}
+html,body{margin:0;width:1080px;height:1920px;overflow:hidden;background:var(--ink)}
+.layer{position:absolute;inset:0;overflow:hidden}
+#space{background:radial-gradient(ellipse 900px 1300px at 50% 55%,#0B2740 0%,#05141F 55%,#020A12 100%)}
+#stars{position:absolute;inset:0}
+#mapwrap{position:absolute;inset:0;transform-origin:540px 1080px}
+svg{position:absolute;left:0;top:0}
+.photo{position:absolute;inset:0;overflow:hidden;opacity:0}
+.photo img{position:absolute;left:0;top:0;transform-origin:0 0}
+#pugbox{position:absolute;left:0;top:0;width:1080px;height:1920px;transform-origin:540px 1000px}
+#pugbox img{width:1080px;height:1920px}
+#pugdark{filter:brightness(.42) saturate(.55) contrast(1.05)}
+#puglit{filter:brightness(1.12) contrast(1.12) saturate(.9)}
+.ring{position:absolute;border:3px solid var(--gold2);border-radius:50%;box-shadow:0 0 24px rgba(255,200,100,.7),inset 0 0 18px rgba(255,200,100,.35)}
+#labels{position:absolute;inset:0;pointer-events:none}
+.lbl{position:absolute;transform:translate(-50%,-50%);white-space:nowrap;font:700 34px/1 M,sans-serif;letter-spacing:6px;color:#EAF4FA;
+ text-shadow:0 2px 12px rgba(0,0,0,.9),0 0 2px rgba(0,0,0,.9)}
+.lbl.big{font-size:44px;letter-spacing:9px}
+.lbl.gold{color:var(--gold2)}
+.pin{position:absolute;width:0;height:0}
+.pin svg{position:absolute;left:-38px;top:-104px;overflow:visible}
+#caption{position:absolute;left:60px;right:60px;top:300px;text-align:center;font:800 84px/1.12 M,sans-serif;color:#fff;
+ letter-spacing:.5px;text-shadow:0 4px 30px rgba(0,0,0,.75),0 2px 6px rgba(0,0,0,.6)}
+#caption .line{display:block;white-space:nowrap}
+#caption .w{display:inline-block;margin:0 .13em;will-change:transform,opacity,filter}
+#caption .g{color:var(--gold)}
+#capshade{position:absolute;left:0;right:0;top:0;height:900px;background:linear-gradient(180deg,rgba(2,8,14,.78) 0%,rgba(2,8,14,.45) 45%,rgba(2,8,14,0) 100%)}
+#logo{position:absolute;left:50%;top:78px;transform:translateX(-50%);display:flex;align-items:center;gap:16px;
+ padding:12px 26px 12px 14px;border-radius:60px;background:rgba(3,16,27,.55);border:1.5px solid rgba(244,183,64,.55);backdrop-filter:blur(6px)}
+#logo img{height:64px;display:block}
+#logobadge{width:64px;height:64px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#1D4A6B,#0A2133);border:3px solid var(--gold);
+ display:flex;align-items:center;justify-content:center;font:800 21px M,sans-serif;color:var(--gold2);letter-spacing:1px}
+#logotext{font:700 24px/1.15 M,sans-serif;color:#F2F6F8;letter-spacing:2.5px}
+#logotext span{display:block;font:600 16px M,sans-serif;color:#C9D7E0;letter-spacing:3.5px}
+#vignette{background:radial-gradient(ellipse 760px 1150px at 50% 52%,rgba(0,0,0,0) 55%,rgba(0,0,0,.55) 100%)}
+#grain{position:absolute;inset:0;width:1080px;height:1920px;opacity:.075;mix-blend-mode:overlay;image-rendering:pixelated}
+#flash{background:#fff;opacity:0}
+#leak{background:radial-gradient(circle 700px at 85% 15%,rgba(255,170,70,.35),rgba(255,120,40,0) 70%);mix-blend-mode:screen;opacity:0}
+</style></head><body>
+<div class="layer" id="space"><canvas id="stars" width="1080" height="1920"></canvas></div>
+<div id="mapwrap"><svg id="map" width="2480" height="4000" style="left:-700px;top:-1500px">
+ <defs>
+  <radialGradient id="sphere" cx="42%" cy="38%" r="70%">
+   <stop offset="0" stop-color="#14405F"/><stop offset=".7" stop-color="#0A2436"/><stop offset="1" stop-color="#061722"/></radialGradient>
+  <radialGradient id="atmo" r="50%"><stop offset=".86" stop-color="#5FC3FF" stop-opacity="0"/><stop offset=".9" stop-color="#5FC3FF" stop-opacity=".35"/><stop offset="1" stop-color="#5FC3FF" stop-opacity="0"/></radialGradient>
+  <radialGradient id="shine" cx="35%" cy="28%" r="60%"><stop offset="0" stop-color="#fff" stop-opacity=".16"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>
+  <filter id="glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="7" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  <filter id="soft" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="16"/></filter>
+ </defs>
+ <circle id="atmoC" fill="url(#atmo)"/>
+ <path id="ocean" fill="url(#sphere)"/>
+ <path id="grat" fill="none" stroke="#3E7FA8" stroke-opacity=".16" stroke-width="1"/>
+ <g id="world"></g>
+ <g id="indiaShadow"></g>
+ <path id="india" fill="#1E5674" stroke="#7FC6E6" stroke-width="1.6"/>
+ <g id="states"></g>
+ <g id="jhShadow"></g>
+ <path id="jh"/>
+ <g id="dists"></g>
+ <g id="hiDists"></g>
+ <path id="shineP" fill="url(#shine)"/>
+</svg></div>
+<div class="photo" id="ph_tiger"><img id="img_tiger" src="assets/tiger.jpg"></div>
+<div class="photo" id="ph_pug"><div id="pugbox"><img id="pugdark" src="assets/pugmarks.jpg"><img id="puglit" src="assets/pugmarks.jpg" style="position:absolute;left:0;top:0"><div id="rings"></div></div></div>
+<div class="photo" id="ph_betla"><img id="img_betla" src="assets/betla.jpg"></div>
+<div class="layer" id="leak"></div>
+<div id="labels"></div>
+<div class="layer" id="vignette"></div>
+<div id="capshade"></div>
+<div id="caption"></div>
+<div id="logo"><div id="logobadge">RCU</div><div id="logotext">RCU<span>PALAMU · JHARKHAND</span></div></div>
+<canvas id="grain" width="270" height="480"></canvas>
+<div class="layer" id="flash"></div>
+<script>
+// ------------------------------------------------------------------ helpers
+const W=1080,H=1920,CX=540,CY=1080,OX=700,OY=1500,DURATION=30; window.DURATION=DURATION;
+const clamp=(x,a=0,b=1)=>Math.max(a,Math.min(b,x));
+const lerp=(a,b,k)=>a+(b-a)*k;
+const seg=(t,a,b)=>clamp((t-a)/(b-a));
+const eio=x=>x<.5?4*x*x*x:1-Math.pow(-2*x+2,3)/2;      // ease in-out cubic
+const eo=x=>1-Math.pow(1-x,3);                           // ease out cubic
+const eob=x=>{const c1=1.70158,c3=c1+1;return 1+c3*Math.pow(x-1,3)+c1*Math.pow(x-1,2);}; // ease out back
+const fade=(t,a,b,c,d)=>Math.min(seg(t,a,b),1-seg(t,c,d)); // in a->b, out c->d
+const $=id=>document.getElementById(id);
+
+// ------------------------------------------------------------------ facts used on screen (only these)
+const PALAMU_PIN=[84.20,23.85];      // Palamu Tiger Reserve (Betla area)
+const RCU=[83.944,24.248];           // Ramchandra Chandravansi University, Bishrampur, Palamu
+const BETLA=[84.19,23.88];
+const RESERVES=[ // India's first 9 tiger reserves (Project Tiger, 1973) – dots only
+ [78.77,29.53],[76.50,26.02],[90.95,26.70],[88.90,21.95],[77.19,21.45],[80.61,22.33],[76.63,11.67],[86.35,21.83],[84.20,23.85]];
+const CAPS=[
+ {a:0.35,b:2.85,l:[["World's","first"],["tiger","census?"]],g:[]},
+ {a:4.0,b:6.9,l:[["Palamu,","Jharkhand."],["1932."]],g:["1932."]},
+ {a:7.55,b:11.75,l:[["Tigers","counted","by"],["their","pugmarks"]],g:["pugmarks"]},
+ {a:12.35,b:16.9,l:[["One","of","India's","first","9"],["tiger","reserves","(1973)"]],g:["9","(1973)"]},
+ {a:18.5,b:21.9,l:[["1,129","km²"],["across","3","districts"]],g:["1,129","km²"]},
+ {a:22.75,b:25.8,l:[["Home","to"],["Betla","National","Park"]],g:["Betla","National","Park"]},
+ {a:26.55,b:30.2,l:[["Palamu:","proud","history,"],["bright","future."]],g:["bright","future."]},
+];
+
+// ------------------------------------------------------------------ topojson decode (no extra libs)
+function decode(topo,obj){
+ const T=topo.transform, arcs=topo.arcs.map(a=>{let x=0,y=0;return a.map(p=>{if(T){x+=p[0];y+=p[1];return[x*T.scale[0]+T.translate[0],y*T.scale[1]+T.translate[1]];}return p;});});
+ const arc=i=>i<0?arcs[~i].slice().reverse():arcs[i];
+ const ring=r=>{const o=[];r.forEach((i,k)=>{const a=arc(i);(k?a.slice(1):a).forEach(p=>o.push(p));});return o;};
+ return obj.geometries.filter(g=>g.arcs).map(g=>({type:"Feature",id:g.id,properties:g.properties||{},
+  geometry:g.type==="Polygon"?{type:"Polygon",coordinates:g.arcs.map(ring)}:{type:"MultiPolygon",coordinates:g.arcs.map(p=>p.map(ring))}}));
+}
+function fixWinding(f){ // d3 wants clockwise exterior rings; flip if the feature covers more than a hemisphere
+ if(d3.geoArea(f)>2*Math.PI){const g=f.geometry;
+  if(g.type==="Polygon")g.coordinates.forEach(r=>r.reverse());else g.coordinates.forEach(p=>p.forEach(r=>r.reverse()));}
+ return f;}
+const asFeatures=gj=>(gj.type==="FeatureCollection"?gj.features:gj.type==="GeometryCollection"?gj.geometries.map(g=>({type:"Feature",properties:{},geometry:g})):[gj]).map(fixWinding);
+
+// ------------------------------------------------------------------ state
+const proj=d3.geoOrthographic().clipAngle(90).precision(0.4), path=d3.geoPath(proj);
+const grat=d3.geoGraticule10();
+let WORLD=[],INDIA=null,STATES=[],JH=null,DIST=[],PLG=[],PAL=null,CAM=[];
+const sel={};
+
+// 3D tilt mapping (must match the CSS transform on #mapwrap)
+let TILT=0; const PERSP=1700;
+function to3d(x,y){x-=OX;y-=OY;const th=TILT*Math.PI/180,dx=x-CX,dy=y-CY,yy=dy*Math.cos(th),z=dy*Math.sin(th),f=PERSP/(PERSP-z);return[CX+dx*f,CY+yy*f,f];}
+
+function fitScale(feat,lon,lat,box){const p=d3.geoOrthographic().rotate([-lon,-lat]).fitExtent([[CX-box/2,CY-box/2],[CX+box/2,CY+box/2]],feat);return p.scale();}
+function boundsCenter(feat){const b=d3.geoBounds(feat);return[(b[0][0]+b[1][0])/2,(b[0][1]+b[1][1])/2];}
+
+window.ready=Promise.all([
+ fetch("data/world50.json").then(r=>r.json()),fetch("data/india.json").then(r=>r.json()),
+ fetch("data/india_states.json").then(r=>r.json()),fetch("data/jh_districts.json").then(r=>r.json()),
+ ...[...document.images].map(im=>im.decode().catch(()=>{}))
+]).then(([w,ind,st,ds])=>{
+ WORLD=decode(w,w.objects.countries).filter(f=>f.id!=="356").map(fixWinding);   // India drawn from official boundary data
+ INDIA={type:"FeatureCollection",features:asFeatures(ind)};
+ STATES=asFeatures(st);
+ JH=STATES.find(f=>f.properties.ST_NM==="Jharkhand");
+ DIST=asFeatures(ds);
+ PLG=["Palamu","Latehar","Garhwa"].map(n=>DIST.find(f=>f.properties.DISTRICT===n));
+ PAL=PLG[0];
+ const plgFC={type:"FeatureCollection",features:PLG};
+ // camera targets fitted to the real shapes
+ const cI=boundsCenter(INDIA), sI=fitScale(INDIA,cI[0],cI[1],880);
+ const cJ=boundsCenter(JH), sJ=fitScale(JH,cJ[0],cJ[1],820);
+ const c3=boundsCenter(plgFC), s3=fitScale(plgFC,c3[0],c3[1],760);
+ // [time, lon, lat, scale, tilt]
+ CAM=[[0,8,12,330,0],[1.7,62,19,390,0],[3.05,cI[0],cI[1]+.6,sI,16],[4.35,cI[0],cI[1]+.6,sI*1.05,18],
+  [5.7,cJ[0],cJ[1]+.15,sJ,30],[7.0,PALAMU_PIN[0]+.25,PALAMU_PIN[1]+.15,sJ*1.35,32],[7.7,PALAMU_PIN[0],PALAMU_PIN[1],sJ*3.4,34],
+  [11.69,PALAMU_PIN[0],PALAMU_PIN[1],sJ*3.4,34],[11.7,cI[0]+3,cI[1]+1,sI*0.86,10],[12.6,cI[0],cI[1]+.6,sI,20],[17.0,cI[0],cI[1]+.6,sI*1.04,22],
+  [18.6,c3[0],c3[1]+.05,s3,32],[22.0,c3[0],c3[1]+.05,s3*1.06,34],[22.7,BETLA[0],BETLA[1],s3*2.6,38],
+  [25.69,BETLA[0],BETLA[1],s3*2.6,38],[25.7,c3[0]+.05,c3[1]+.05,s3*0.82,26],[27.0,RCU[0]+.1,RCU[1]-.12,s3*1.05,32],[30,RCU[0]+.08,RCU[1]-.1,s3*1.14,34]];
+ // build DOM
+ const gw=d3.select("#world");
+ sel.world=gw.selectAll("path").data(WORLD).enter().append("path").attr("fill","#173746").attr("stroke","#2C5568").attr("stroke-width",.7);
+ sel.states=d3.select("#states").selectAll("path").data(STATES).enter().append("path").attr("fill","none").attr("stroke","#8CCBE8").attr("stroke-opacity",.28).attr("stroke-width",1);
+ sel.dists=d3.select("#dists").selectAll("path").data(DIST).enter().append("path").attr("fill","none").attr("stroke","#FFE2A8").attr("stroke-width",1.2);
+ sel.hi=d3.select("#hiDists").selectAll("path").data(PLG).enter().append("path").attr("stroke","#FFD27A").attr("stroke-width",4).attr("stroke-linejoin","round").attr("filter","url(#glow)");
+ sel.jhSh=d3.select("#jhShadow").selectAll("path").data(d3.range(7)).enter().append("path");
+ sel.inSh=d3.select("#indiaShadow").selectAll("path").data(d3.range(5)).enter().append("path");
+ // labels + pins
+ const L=$("labels");
+ const mk=(cls,html)=>{const d=document.createElement("div");d.className=cls;d.innerHTML=html;L.appendChild(d);return d;};
+ sel.lab={india:mk("lbl big","INDIA"),jh:mk("lbl big gold","JHARKHAND"),pal:mk("lbl big gold","PALAMU"),pal4:mk("lbl gold","PALAMU"),
+  dPal:mk("lbl","PALAMU"),dLat:mk("lbl","LATEHAR"),dGar:mk("lbl","GARHWA"),rcu:mk("lbl big gold","RCU")};
+ const pinSVG=(c1,c2,txt)=>`<svg width="76" height="104" viewBox="0 0 76 104"><defs><linearGradient id="pg${txt}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${c1}"/><stop offset="1" stop-color="${c2}"/></linearGradient></defs>
+  <path d="M38 102C38 102 4 60 4 37a34 34 0 0 1 68 0c0 23-34 65-34 65z" fill="url(#pg${txt})" stroke="#fff" stroke-width="3"/>
+  <circle cx="38" cy="37" r="17" fill="#0A2133"/>${txt?`<text x="38" y="44" text-anchor="middle" font-family="M" font-weight="800" font-size="17" fill="${c1}">${txt}</text>`:`<circle cx="38" cy="37" r="8" fill="${c1}"/>`}</svg>`;
+ const mkpin=(c1,c2,txt)=>{const d=document.createElement("div");d.className="pin";d.innerHTML=`<div class="sh"></div><div class="rp"></div><div class="rp"></div>`+pinSVG(c1,c2,txt);L.appendChild(d);return d;};
+ sel.pinPal=mkpin("#FFD27A","#E08A1E",""); sel.pinRcu=mkpin("#FFD27A","#E08A1E","RCU");
+ [sel.pinPal,sel.pinRcu].forEach(p=>{const sh=p.querySelector(".sh");Object.assign(sh.style,{position:"absolute",left:"-26px",top:"-9px",width:"52px",height:"18px",borderRadius:"50%",background:"rgba(0,0,0,.55)",filter:"blur(4px)"});
+  p.querySelectorAll(".rp").forEach(r=>Object.assign(r.style,{position:"absolute",border:"3px solid #FFD27A",borderRadius:"50%",boxShadow:"0 0 18px rgba(255,200,110,.8)"}));});
+ sel.dots=RESERVES.map((p,i)=>{const d=document.createElement("div");Object.assign(d.style,{position:"absolute",width:"0",height:"0"});
+  d.innerHTML=`<div class="core"></div><div class="halo"></div>`;L.appendChild(d);
+  Object.assign(d.querySelector(".core").style,{position:"absolute",borderRadius:"50%",background:i===8?"#FFD27A":"#FFE9C2",boxShadow:"0 0 18px 6px rgba(255,190,90,.8)"});
+  Object.assign(d.querySelector(".halo").style,{position:"absolute",borderRadius:"50%",border:"3px solid rgba(255,210,122,.9)"});return d;});
+ // pugmark rings (positions in the 1080x1920 pug box, bottom -> top)
+ sel.pugs=[[580,1580],[550,1440],[436,1200],[380,1024],[450,650]].map(p=>{const r=document.createElement("div");r.className="ring";$("rings").appendChild(r);return{p,r};});
+ // stars
+ const sc=$("stars").getContext("2d"),rnd=d3.randomLcg(7);
+ for(let i=0;i<900;i++){const x=rnd()*W,y=rnd()*H,r=rnd()*1.4+.2;sc.globalAlpha=.25+rnd()*.6;sc.fillStyle=rnd()<.15?"#FFE7C4":"#DDEBFF";sc.beginPath();sc.arc(x,y,r,0,7);sc.fill();}
+ // logo: use assets/rcu_logo.png if present
+ return new Promise(res=>{const im=new Image();im.onload=()=>{$("logobadge").replaceWith(im);$("logotext").remove();res();};im.onerror=res;im.src="assets/rcu_logo.png";});
+}).then(()=>document.fonts.ready).then(()=>seek(0));
+
+// ------------------------------------------------------------------ camera
+function camAt(t){
+ const E=CAM[2];
+ if(t<E[0]){ // scene 1: one continuous spin + accelerating zoom into India
+  const k=eio(seg(t,0,E[0]));
+  return{lon:lerp(8,E[1],k),lat:lerp(12,E[2],k),s:Math.exp(lerp(Math.log(330),Math.log(E[3]),Math.pow(seg(t,0.3,E[0]),2.3))),tilt:lerp(0,E[4],Math.pow(seg(t,1.8,E[0]),2))};}
+ let i=2;while(i<CAM.length-2&&t>CAM[i+1][0])i++;
+ const A=CAM[i],B=CAM[i+1],k=eio(seg(t,A[0],B[0]));
+ return{lon:lerp(A[1],B[1],k),lat:lerp(A[2],B[2],k),s:Math.exp(lerp(Math.log(A[3]),Math.log(B[3]),k)),tilt:lerp(A[4],B[4],k)};
+}
+
+// ------------------------------------------------------------------ captions (After-Effects style word build)
+let capIdx=-1;
+function renderCaption(t){
+ const c=CAPS.findIndex(c=>t>=c.a-0.01&&t<c.b+0.01), el=$("caption");
+ if(c!==capIdx){capIdx=c;el.innerHTML=c<0?"":CAPS[c].l.map(line=>`<span class="line">${line.map(w=>`<span class="w${CAPS[c].g.includes(w)?" g":""}">${w}</span>`).join("")}</span>`).join("");}
+ if(c<0)return; const C=CAPS[c],ws=el.querySelectorAll(".w");
+ if(!el.dataset.fit||el.dataset.fit!=c){el.style.fontSize="84px";const mw=Math.max(...[...el.querySelectorAll(".line")].map(l=>l.scrollWidth));el.style.fontSize=Math.min(84,84*950/mw)+"px";el.dataset.fit=c;}
+ ws.forEach((w,i)=>{const kin=eo(seg(t,C.a+i*0.075,C.a+i*0.075+0.55)),kout=seg(t,C.b-0.4,C.b);
+  w.style.opacity=kin*(1-kout); w.style.transform=`translateY(${(1-kin)*46-kout*20}px) scale(${lerp(.92,1,kin)})`; w.style.filter=`blur(${(1-kin)*10+kout*8}px)`;});
+}
+
+// ------------------------------------------------------------------ frame
+window.seek=function(t){
+ const cam=camAt(t); TILT=cam.tilt;
+ proj.rotate([-cam.lon,-cam.lat]).scale(cam.s).translate([CX+OX,CY+OY]);
+ $("mapwrap").style.transform=`perspective(${PERSP}px) rotateX(${TILT}deg)`;
+ const mOp=t<7.05?1:t<11.7?1-seg(t,7.05,7.7):t<22.0?seg(t,11.7,12.25):t<25.7?1-seg(t,22.0,22.7):seg(t,25.7,26.2);
+ $("mapwrap").style.opacity=mOp; $("labels").style.opacity=mOp;
+ $("space").style.opacity=1;
+ // globe
+ const globe=1-seg(cam.s,900,2600);            // sphere/atmosphere only matter while the globe is small
+ $("ocean").setAttribute("d",path({type:"Sphere"}));
+ $("ocean").setAttribute("opacity",lerp(.0,1,globe)+0.0);
+ $("shineP").setAttribute("d",path({type:"Sphere"})); $("shineP").setAttribute("opacity",globe);
+ const ac=$("atmoC");ac.setAttribute("cx",CX+OX);ac.setAttribute("cy",CY+OY);ac.setAttribute("r",cam.s*1.12);ac.setAttribute("opacity",globe);
+ $("grat").setAttribute("d",path(grat)); $("grat").setAttribute("opacity",globe);
+ $("stars").style.opacity=.35+.65*globe;
+ sel.world.attr("d",path).attr("fill-opacity",lerp(.75,1,globe)).attr("stroke-opacity",lerp(.6,1,globe));
+ // India slab (extruded look)
+ const dI=path(INDIA), slab=clamp(seg(cam.s,500,1500));
+ $("india").setAttribute("d",dI);
+ const inHi=seg(t,1.9,3.0);
+ $("india").setAttribute("fill",d3.interpolateRgb("#1B4A63","#1F5878")(inHi));
+ $("india").setAttribute("stroke-width",1.2+inHi*1.4);
+ sel.inSh.attr("d",dI).attr("fill","#020B12").attr("opacity",(d)=>slab*.22).attr("transform",d=>`translate(0 ${(d+1)*3*slab})`);
+ sel.states.attr("d",path).attr("stroke-opacity",.28*seg(cam.s,900,1500));
+ // Jharkhand highlight (scene 2) and Palamu district (scene 7)
+ const jhK=t<7.8?eo(seg(t,3.35,4.1)):t<22.7?0:0.0;
+ const dJ=path(JH);
+ $("jh").setAttribute("d",dJ);
+ $("jh").setAttribute("fill",`rgba(244,170,60,${.42*jhK})`);
+ $("jh").setAttribute("stroke",`rgba(255,214,130,${jhK})`); $("jh").setAttribute("stroke-width",3.5); $("jh").setAttribute("filter","url(#glow)");
+ sel.jhSh.attr("d",dJ).attr("fill","#1A0C02").attr("opacity",jhK*.35).attr("transform",d=>`translate(0 ${(d+1)*2.6*jhK})`);
+ // districts (only when zoomed in)
+ const dOp=seg(cam.s,6000,11000);
+ sel.dists.attr("d",dOp>0?path:null).attr("stroke-opacity",dOp*(t>17?.32:.22));
+ // scene 5: Palamu, Latehar, Garhwa borders draw on; scene 7: Palamu glows
+ sel.hi.each(function(f,i){
+  const a=18.55+i*.5, k=eo(seg(t,a,a+1.1));
+  let fillA=0.30*eo(seg(t,a+.5,a+1.4)), strokeK=k;
+  if(t>=25.7){strokeK=i===0?1:.55; fillA=i===0?.34*eo(seg(t,26.0,26.8)):.08;}
+  if(t<17||(t>22.7&&t<25.7)){strokeK=0;fillA=0;}
+  if(strokeK<=0&&fillA<=0){this.setAttribute("d","");return;}
+  const d=path(f); this.setAttribute("d",d||"");
+  if(!d)return; const L=this.getTotalLength();
+  this.setAttribute("stroke-dasharray",`${L*strokeK} ${L}`);
+  this.setAttribute("fill",`rgba(244,170,60,${fillA})`);
+  this.setAttribute("stroke-opacity",t>=25.7&&i>0?.6:1);
+ });
+ // ---- overlays positioned through the 3D tilt
+ const place=(el,ll,op,dy=0)=>{const p=proj(ll);if(!p||op<=0){el.style.opacity=0;return null;}const[x,y,f]=to3d(p[0],p[1]);el.style.left=x+"px";el.style.top=(y+dy*f)+"px";el.style.opacity=op;return[x,y,f];};
+ const cen=f=>d3.geoCentroid(f);
+ place(sel.lab.india,[79.2,24.2],fade(t,2.6,3.3,4.2,4.8));
+ place(sel.lab.jh,[86.05,23.25],fade(t,3.7,4.3,5.5,6.0),-0);
+ // Palamu pin drop (scene 2) — falls in, bounces, ripples
+ pinDrop(sel.pinPal,PALAMU_PIN,t,5.55,fade(t,5.5,5.6,7.0,7.6));
+ place(sel.lab.pal,PALAMU_PIN,fade(t,5.95,6.4,7.0,7.5),-150);
+ // scene 4: nine reserve dots light up, Palamu last
+ sel.dots.forEach((d,i)=>{const a=i<8?12.75+i*.3:15.45, k=eob(seg(t,a,a+.45)), op=fade(t,a,a+.2,21.9,22.6)*(t<17.8?1:1-seg(t,17.0,17.8));
+  const r=place(d,RESERVES[i],op); if(!r)return; const sz=(i===8?30:20)*k*r[2];
+  Object.assign(d.querySelector(".core").style,{left:-sz/2+"px",top:-sz/2+"px",width:sz+"px",height:sz+"px"});
+  const hk=seg(t,a,a+1.2), hs=(i===8?40+150*hk:20+80*hk)*r[2]; const h=d.querySelector(".halo");
+  Object.assign(h.style,{left:-hs/2+"px",top:-hs/2+"px",width:hs+"px",height:hs+"px",opacity:(1-hk)*(i===8?1:.8)});
+  if(i===8&&t>15.45){const hk2=((t-15.45)%1.1)/1.1,hs2=(40+150*hk2)*r[2];Object.assign(h.style,{left:-hs2/2+"px",top:-hs2/2+"px",width:hs2+"px",height:hs2+"px",opacity:1-hk2});}
+ });
+ place(sel.lab.pal4,PALAMU_PIN,fade(t,15.7,16.1,16.9,17.4),-58);
+ // scene 5 district names
+ place(sel.lab.dPal,[84.07,24.27],fade(t,19.0,19.4,21.8,22.4));
+ place(sel.lab.dLat,[84.35,23.66],fade(t,19.5,19.9,21.8,22.4));
+ place(sel.lab.dGar,[83.68,24.12],fade(t,20.0,20.4,21.8,22.4));
+ // scene 7: RCU pin on Palamu
+ pinDrop(sel.pinRcu,RCU,t,26.7,fade(t,26.6,26.7,31,32));
+ place(sel.lab.rcu,RCU,fade(t,27.2,27.7,31,32),-150);
+ // ---- photos
+ photos(t);
+ renderCaption(t);
+ // caption shade stronger over photos
+ $("capshade").style.opacity=.75+.25*Math.max(fade(t,7.2,7.6,11.6,12.1),fade(t,22.2,22.6,25.6,26.1));
+ // light leak + cut flash
+ $("leak").style.opacity=Math.max(fade(t,7.0,7.5,8.5,9.4),fade(t,22.2,22.8,24.5,25.8))*.9;
+ $("flash").style.opacity=.10*Math.max(fade(t,6.95,7.15,7.15,7.6),fade(t,22.0,22.25,22.25,22.8));
+ // logo gently settles at the start and grows a touch at the end
+ $("logo").style.opacity=eo(seg(t,0.15,0.9));
+ $("logo").style.transform=`translateX(-50%) scale(${lerp(.94,1,eo(seg(t,.15,.9)))*lerp(1,1.12,eio(seg(t,27.5,29.2)))})`;
+ grain(t);
+};
+
+function pinDrop(el,ll,t,a,op){
+ const p=proj(ll); if(!p||op<=0){el.style.opacity=0;return;}
+ const[x,y,f]=to3d(p[0],p[1]); const k=seg(t,a,a+.55);
+ const fall=(1-eob(k))*-260; el.style.left=x+"px"; el.style.top=y+"px"; el.style.opacity=op*clamp(k*4);
+ const s=f*1.05; const svg=el.querySelector("svg"); svg.style.transform=`translateY(${fall}px) scale(${s})`; svg.style.transformOrigin="38px 104px";
+ const sh=el.querySelector(".sh"); sh.style.opacity=clamp(k*1.4)*.9; sh.style.transform=`scale(${lerp(.4,1,k)*f})`;
+ el.querySelectorAll(".rp").forEach((r,i)=>{const kk=((t-a-.45-i*.55)%1.1+1.1)%1.1/1.1, on=t>a+.45+i*.55; const R=(16+120*kk)*f;
+  Object.assign(r.style,{left:-R+"px",top:-R*.42+"px",width:2*R+"px",height:2*R*.42+"px",opacity:on?(1-kk)*.9:0});});
+}
+
+function photos(t){
+ // tiger: drifts with the animal, gentle push-in
+ const tg=fade(t,7.05,7.7,9.05,9.6); $("ph_tiger").style.opacity=tg;
+ if(tg>0){const k=seg(t,7.0,9.6),sc=lerp(1.0,1.07,k)*(1920/2100), iw=3150*sc, x=lerp(0.30,0.10,eio(k))*iw;
+  $("img_tiger").style.transform=`translate(${-x}px, ${-(2100*sc-1920)/2}px) scale(${sc})`;}
+ // pugmarks: darkened trail, each print lights up one after another
+ const pg=fade(t,9.05,9.6,11.7,12.25); $("ph_pug").style.opacity=pg;
+ if(pg>0){const k=seg(t,9.0,12.25); $("pugbox").style.transform=`scale(${lerp(1.0,1.08,k)}) translateY(${lerp(30,-10,k)}px)`;
+  const masks=[],pos=[];
+  sel.pugs.forEach(({p,r},i)=>{const a=9.55+i*.42,kk=eo(seg(t,a,a+.45)),R=150*kk;
+   if(kk>0){masks.push(`radial-gradient(circle ${Math.max(R,1)}px at ${p[0]}px ${p[1]}px, #000 45%, rgba(0,0,0,0) 100%)`);}
+   const rk=seg(t,a,a+.9),rs=lerp(90,210,eo(rk));
+   Object.assign(r.style,{left:p[0]-rs/2+"px",top:p[1]-rs/2+"px",width:rs+"px",height:rs+"px",opacity:kk>0?(1-rk)*.95+.0:0});});
+  const m=masks.length?masks.join(","):"linear-gradient(transparent,transparent)";
+  const lit=$("puglit"); lit.style.webkitMaskImage=m; lit.style.maskImage=m;}
+ // Betla: slow lateral glide over the forest
+ const bt=fade(t,22.05,22.7,25.65,26.2); $("ph_betla").style.opacity=bt;
+ if(bt>0){const k=seg(t,22.0,26.2),sc=lerp(1.0,1.06,k)*(1920/2100), iw=4664*sc, x=lerp(0.34,0.46,eio(k))*iw;
+  $("img_betla").style.transform=`translate(${-x}px, ${-(2100*sc-1920)/2}px) scale(${sc})`;}
+}
+
+// deterministic film grain
+const gctx=$("grain").getContext("2d"),gimg=gctx.createImageData(270,480);
+function grain(t){let s=(Math.floor(t*30)*2654435761)>>>0;const d=gimg.data;
+ for(let i=0;i<d.length;i+=4){s^=s<<13;s^=s>>>17;s^=s<<5;const v=(s>>>24);d[i]=d[i+1]=d[i+2]=v;d[i+3]=255;}gctx.putImageData(gimg,0,0);}
+</script>
+</body></html>

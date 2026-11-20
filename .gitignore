@@ -36,3 +36,6 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+
+# full-size source photos (re-downloadable, see CREDITS.tsv)
+reels/*/assets/photos/*.jpg
