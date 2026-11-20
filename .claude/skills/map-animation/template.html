@@ -1,0 +1,115 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;700&family=Inter:wght@500;700&display=block" rel="stylesheet">
+<script src="lib/d3.min.js"></script>
+<style>
+html,body{margin:0;width:1920px;height:1080px;overflow:hidden;background:#07131F}
+#stage{position:absolute;inset:0;
+ background:radial-gradient(ellipse 1300px 800px at 50% 55%,#10283D 0%,#07131F 75%)}
+svg{position:absolute;inset:0}
+.state{stroke:#07131F;stroke-width:1.1;stroke-linejoin:round}
+#year{position:absolute;left:90px;top:70px;font:700 150px/1 Oswald,sans-serif;color:#F4F1E8;letter-spacing:2px}
+#sub{position:absolute;left:96px;top:232px;font:500 34px Inter,sans-serif;color:#9FB3C8}
+#sub b{color:#F4F1E8;font-weight:700}
+#title{position:absolute;right:90px;top:80px;text-align:right;font:700 54px/1.1 Oswald,sans-serif;color:#F4F1E8;text-transform:uppercase}
+#title span{display:block;font:500 28px Inter,sans-serif;color:#9FB3C8;text-transform:none;margin-top:8px}
+#legend{position:absolute;left:96px;bottom:70px;display:flex;gap:34px;font:500 26px Inter,sans-serif;color:#C9D6E3}
+#legend i{display:inline-block;width:22px;height:22px;border-radius:5px;margin-right:10px;vertical-align:-3px}
+.lbl{font:700 30px Inter,sans-serif;fill:#fff;paint-order:stroke;stroke:#07131F;stroke-width:7px;stroke-linejoin:round}
+.lbly{font:700 24px Inter,sans-serif;fill:#FFD66B;paint-order:stroke;stroke:#07131F;stroke-width:6px}
+</style></head><body>
+<div id="stage"></div>
+<svg id="map" width="1920" height="1080"></svg>
+<div id="year">1787</div>
+<div id="sub"><b id="cnt">0</b> states</div>
+<div id="title">How the USA Grew<span>State by state, 1787–1959</span></div>
+<div id="legend">
+ <div><i style="background:#F2C14E"></i>Original 13</div>
+ <div><i style="background:#F28C38"></i>1791–1849</div>
+ <div><i style="background:#E5484D"></i>1850–1899</div>
+ <div><i style="background:#8B6CFF"></i>1900–1959</div>
+</div>
+<script>
+// TIMELINE DATA: [name, year] — the year decimals keep the order inside one year. Replace with your own map events.
+const ADM=[["Delaware",1787.93],["Pennsylvania",1787.95],["New Jersey",1787.96],["Georgia",1788.00],["Connecticut",1788.02],
+["Massachusetts",1788.10],["Maryland",1788.32],["South Carolina",1788.39],["New Hampshire",1788.47],["Virginia",1788.48],
+["New York",1788.57],["North Carolina",1789.89],["Rhode Island",1790.41],["Vermont",1791.2],["Kentucky",1792.4],
+["Tennessee",1796.4],["Ohio",1803.2],["Louisiana",1812.3],["Indiana",1816.9],["Mississippi",1817.9],["Illinois",1818.9],
+["Alabama",1819.9],["Maine",1820.2],["Missouri",1821.6],["Arkansas",1836.5],["Michigan",1837.1],["Florida",1845.2],
+["Texas",1845.95],["Iowa",1846.95],["Wisconsin",1848.4],["California",1850.7],["Minnesota",1858.4],["Oregon",1859.1],
+["Kansas",1861.1],["West Virginia",1863.5],["Nevada",1864.8],["Nebraska",1867.2],["Colorado",1876.6],
+["North Dakota",1889.83],["South Dakota",1889.84],["Montana",1889.85],["Washington",1889.86],["Idaho",1890.5],
+["Wyoming",1890.52],["Utah",1896.0],["Oklahoma",1907.9],["New Mexico",1912.0],["Arizona",1912.1],["Alaska",1959.0],["Hawaii",1959.6]];
+const color=y=>y<1791?"#F2C14E":y<1850?"#F28C38":y<1900?"#E5484D":"#8B6CFF";
+
+// Versions: ?v=1 basic, ?v=2 + flash and labels, default = final
+const V=+(new URLSearchParams(location.search).get("v")||3);
+// Schedule: first 13 events faster, then 1.1 s per event
+const T0=1.5; const ev=[]; let t=T0;
+ADM.forEach(([n,y],i)=>{ev.push({n,y,t}); t+= (i<12&&V>=3)?0.45:1.1;});
+window.DURATION=t+3.5;
+
+// --- TopoJSON decoder (no extra libraries) ---
+function decode(topo,obj){
+ const [sx,sy]=topo.transform.scale,[tx,ty]=topo.transform.translate;
+ const arcs=topo.arcs.map(a=>{let x=0,y=0;return a.map(([dx,dy])=>{x+=dx;y+=dy;return[x*sx+tx,y*sy+ty];});});
+ const arc=i=>{const a=i<0?arcs[~i].slice().reverse():arcs[i];return a;};
+ const ring=r=>{const out=[];r.forEach((i,k)=>{const a=arc(i);(k?a.slice(1):a).forEach(p=>out.push(p));});return out;};
+ return obj.geometries.map(g=>({type:"Feature",properties:g.properties,
+  geometry:g.type==="Polygon"?{type:"Polygon",coordinates:g.arcs.map(ring)}:
+           {type:"MultiPolygon",coordinates:g.arcs.map(p=>p.map(ring))}}));
+}
+const ease=x=>x<0?0:x>1?1:1-Math.pow(1-x,3);
+let feats=[],path,byName={};
+window.ready=fetch("lib/states-10m.json").then(r=>r.json()).then(topo=>{
+ feats=decode(topo,topo.objects.states);
+ const proj=d3.geoAlbersUsa().fitExtent([[300,210],[1700,960]],{type:"FeatureCollection",features:feats.filter(f=>f.properties.name!=="Puerto Rico")});
+ path=d3.geoPath(proj);
+ const svg=d3.select("#map");
+ const g=svg.append("g").attr("id","g");
+ feats.forEach(f=>{
+  const d=path(f); if(!d) return;
+  const name=f.properties.name;
+  const el=g.append("path").attr("class","state").attr("d",d).attr("fill","#1B3348");
+  const c=path.centroid(f);
+  byName[name]={el,c};
+ });
+ const lg=svg.append("g").attr("id","labels");
+ ev.forEach(e=>{const s=byName[e.n]; if(!s) return;
+  e.lbl=lg.append("text").attr("class","lbl").attr("text-anchor","middle").text(e.n);
+  e.lyr=lg.append("text").attr("class","lbly").attr("text-anchor","middle").text(Math.floor(e.y));
+ });
+ return document.fonts.ready;
+}).then(()=>{seek(0);});
+
+// Draw the frame at time T (seconds). render.py calls this for every frame.
+window.seek=function(T){
+ let year=1787,n=0;
+ ev.forEach((e,i)=>{
+  const s=byName[e.n]; if(!s) return;
+  const k=ease((T-e.t)/0.5);
+  if(T>=e.t){n++; year=Math.floor(e.y);}
+  // fill: dark -> white flash -> era color
+  const fl=(T>=e.t&&V>=2)?Math.max(0,1-(T-e.t)/0.6):0;
+  const base=k>0?d3.interpolateRgb("#1B3348",color(e.y))(k):"#1B3348";
+  s.el.attr("fill",fl>0?d3.interpolateRgb(base,"#FFFFFF")(fl*0.55):base);
+  if(e.n==="Maryland"&&byName["District of Columbia"]) byName["District of Columbia"].el.attr("fill",base);
+  // label: pops in, holds, fades out
+  const hold=(i<12&&V>=3)?0.6:1.0, a=V<2||T<e.t?0:T<e.t+0.25?(T-e.t)/0.25:T<e.t+hold?1:Math.max(0,1-(T-e.t-hold)/0.3);
+  const dy=(1-ease((T-e.t)/0.35))*18;
+  let [cx,cy]=s.c; if(e.n==="Florida")cx+=40; if(e.n==="Louisiana")cx-=20; if(e.n==="Michigan"){cx+=15;cy+=25;}
+  e.lbl.attr("x",cx).attr("y",cy-4+dy).attr("opacity",a);
+  e.lyr.attr("x",cx).attr("y",cy+26+dy).attr("opacity",a);
+ });
+ // smooth year counter between events
+ const prev=[...ev].reverse().find(e=>T>=e.t), next=ev.find(e=>T<e.t);
+ if(prev&&next){const f=Math.min(1,(T-prev.t)/(next.t-prev.t));year=Math.floor(Math.floor(prev.y)+(Math.floor(next.y)-Math.floor(prev.y))*f);}
+ document.getElementById("year").textContent=year;
+ document.getElementById("cnt").textContent=n;
+ // slow camera push-in
+ const z=V>=3?1+0.04*Math.min(1,T/window.DURATION):1;
+ d3.select("#g").attr("transform",`translate(960 585) scale(${z}) translate(-960 -585)`);
+ d3.select("#labels").attr("transform",`translate(960 585) scale(${z}) translate(-960 -585)`);
+};
+</script>
+</body></html>

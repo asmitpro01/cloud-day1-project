@@ -1,0 +1,7 @@
+1) Build a 1920x1080 map animation of the United States. Every state starts dark and lights up in the year it joined the Union. Add a big year counter in the corner, show the number of states, and color each state by era.
+
+2) Add a quick white flash when a state joins, and a label with the state name and year that pops up and fades out.
+
+3) Speed up the first 13 states and add a slow camera push-in.
+
+4) Write a script that opens the page in headless Chrome, captures every frame at 30 fps and pipes them into FFmpeg to make an MP4.
